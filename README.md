@@ -1,6 +1,6 @@
 # Medismart (PharmaDesk)
 
-Classic MDI-style pharmacy billing, stock and accounting software. **Login: admin / admin**. Step-by-step usage: see [USAGE.md](USAGE.md). Layout notes: [UI-SPEC.md](UI-SPEC.md).
+Classic MDI-style pharmacy billing, stock and accounting software with a warehouse supply flow (shop requests → warehouse approves & dispatches → shop receives), staff logins and attendance. **Login: admin / admin** (also staff/staff, warehouse/warehouse in demo). Step-by-step usage: see [USAGE.md](USAGE.md). Layout notes: [UI-SPEC.md](UI-SPEC.md).
 
 Modern pharmacy billing, inventory and accounts software that runs in the browser (no install, works offline).
 

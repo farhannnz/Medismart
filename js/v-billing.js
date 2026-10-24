@@ -21,6 +21,8 @@ PD.showBill = function (b, onDone) {
 /* ---------- billing screen (MediSmart "Sale / Billing" window layout) ---------- */
 PD.itemNo = function (id) { var m = PD.itemNo.map; if (!m || m.n !== PD.DB.items.length) { m = PD.itemNo.map = { n: PD.DB.items.length }; PD.DB.items.forEach(function (x, i) { m[x.id] = i + 1; }); } return m[id] || ''; };
 function numId(id) { return PD.itemNo(id); }
+function rxc(it) { return it.schedule === 'H1' || it.schedule === 'X' ? 'rx2' : it.schedule === 'H' ? 'rx' : ''; }
+function expc(e) { if (!e) return ''; var d = PD.daysToExp(e); return d < 0 ? 'expd' : d <= (PD.DB.settings.expiryDays || 90) ? 'expw' : ''; }
 PD.views.billing = { render: function (host, arg) {
   PD.hotkeys = {};
   var D = PD.DB, S = D.settings, cart = [], meta = { customerId: '', doctor: '', payMode: 'cash', received: '', discPct: '', discAmt: '', remarks: '' }, sel = -1, idx = 0, results = [], browse = -1;
@@ -48,7 +50,7 @@ PD.views.billing = { render: function (host, arg) {
     var res = $('#res', host);
     res.innerHTML = results.map(function (r, i) {
       var it = r.item;
-      return '<div class="it ' + (i === idx ? 'on' : '') + '" data-i="' + i + '"><span class="nm"><b>' + (r.st > 0 ? '' : '# ') + esc(it.name) + '</b>' + PD.schedBadge(it.schedule) + '<small> ' + esc(it.generic) + ' • ' + esc(svc.mfrName(it.mfrId)) + (it.rack ? ' • Rack ' + esc(it.rack) : '') + '</small></span><span class="pr">' + PD.n2(it.mrp) + '<small>' + (r.st > 0 ? PD.qty(r.st) : 'out') + '</small></span></div>';
+      return '<div class="it ' + (i === idx ? 'on' : '') + '" data-i="' + i + '"><span class="nm"><b class="' + rxc(it) + '">' + (r.st > 0 ? '' : '# ') + esc(it.name) + '</b>' + (rxc(it) ? ' <small>(Rx)</small>' : '') + '' + PD.schedBadge(it.schedule) + '<small> ' + esc(it.generic) + ' • ' + esc(svc.mfrName(it.mfrId)) + (it.rack ? ' • Rack ' + esc(it.rack) : '') + '</small></span><span class="pr">' + PD.n2(it.mrp) + '<small>' + (r.st > 0 ? PD.qty(r.st) : 'out') + '</small></span></div>';
     }).join('') || '<div class="empty">No medicines match.</div>';
     res.style.display = document.activeElement === q ? 'block' : 'none';
     var on = $('.on', res); if (on) on.scrollIntoView({ block: 'nearest' });
@@ -84,7 +86,7 @@ PD.views.billing = { render: function (host, arg) {
     $('#cart', host).innerHTML = '<thead><tr><th style="width:62px">Item ID</th><th>Item Name</th><th style="width:110px">Batch</th><th style="width:56px">Exp</th><th class="r" style="width:60px">Qty</th><th class="r" style="width:70px">MRP</th><th class="r" style="width:58px">Disc</th><th class="r" style="width:76px">Rate</th><th class="r" style="width:80px">Amount</th><th class="r" style="width:50px">Tax%</th><th class="r" style="width:60px">Tax</th></tr></thead><tbody>' +
       cart.map(function (l, i) {
         var it = svc.item(l.itemId), bt = svc.batch(l.batchId), bs = svc.batchesOf(l.itemId, true), tx = PD.num(it.tax || 0), amt = lineAmt(l);
-        return '<tr class="cartrow ' + (i === sel ? 'sel' : '') + '" data-r="' + i + '"><td>' + numId(it.id) + '</td><td>' + esc(it.name) + ' ' + PD.schedBadge(it.schedule) + '</td><td><select class="in sm" data-b="' + i + '">' + bs.map(function (b) { return '<option value="' + b.id + '"' + (b.id === l.batchId ? ' selected' : '') + '>' + esc(b.batchNo) + ' (' + PD.qty(b.qty) + ')</option>'; }).join('') + '</select></td><td>' + PD.fmtExp(bt.expiry) + '</td>' +
+        return '<tr class="cartrow ' + (i === sel ? 'sel' : '') + '" data-r="' + i + '"><td>' + numId(it.id) + '</td><td class="' + rxc(it) + '">' + esc(it.name) + ' ' + PD.schedBadge(it.schedule) + (rxc(it) ? ' <small>Rx</small>' : '') + '</td><td><select class="in sm" data-b="' + i + '">' + bs.map(function (b) { return '<option value="' + b.id + '"' + (b.id === l.batchId ? ' selected' : '') + '>' + esc(b.batchNo) + ' (' + PD.qty(b.qty) + ')</option>'; }).join('') + '</select></td><td class="' + expc(bt.expiry) + '">' + PD.fmtExp(bt.expiry) + '</td>' +
           '<td class="r"><input class="in sm qn" data-q="' + i + '" type="number" min="0" step="any" value="' + l.qty + '"></td><td class="r">' + PD.n2(bt.mrp || it.mrp) + '</td><td class="r"><input class="in sm" data-d="' + i + '" type="number" min="0" max="100" step="any" value="' + (l.disc || '') + '"></td><td class="r"><input class="in sm" data-rt="' + i + '" type="number" step="any" value="' + l.rate + '"></td><td class="r"><b data-am="' + i + '">' + PD.n2(amt) + '</b></td><td class="r">' + tx.toFixed(1) + '</td><td class="r" data-tx="' + i + '">' + PD.n2(amt - amt / (1 + tx / 100)) + '</td></tr>';
       }).join('') + '</tbody>';
     totals(); showEntry();
@@ -130,7 +132,7 @@ PD.views.billing = { render: function (host, arg) {
 
   /* customer (patient) + doctor */
   var cus = $('#cus', host);
-  function cinfo() { var c = meta.customerId ? svc.customer(meta.customerId) : null; $('#cinfo', host).innerHTML = c ? esc(c.type) + ' • Outstanding <b>' + PD.n2(svc.partyBalance('cus', c.id)) + '</b>' : ''; }
+  function cinfo() { var c = meta.customerId ? svc.customer(meta.customerId) : null, last = c && D.sales.filter(function (s) { return s.customerId === c.id; }).sort(function (a, b) { return b.date.localeCompare(a.date); }), n = last ? last.length : 0; $('#cinfo', host).innerHTML = c ? esc(c.type) + ' • ' + n + ' visit' + (n === 1 ? '' : 's') + (n ? ' • last ' + PD.fmtDate(last[0].date) : ' • first visit') + ' • Outstanding <b>' + PD.n2(svc.partyBalance('cus', c.id)) + '</b> <a href="#" id="chl">history</a>' : ''; var h = $('#chl', host); if (h) h.onclick = function (e) { e.preventDefault(); PD.go('custhist', { customerId: c.id }); }; }
   PD.combo(cus, { source: function (qv) { qv = qv.toLowerCase(); return D.customers.filter(function (c) { return c.active !== false && (!qv || (c.name + ' ' + (c.phone || '')).toLowerCase().indexOf(qv) >= 0); }).map(function (c) { return { id: c.id, label: '<b>' + esc(c.name) + '</b>', sub: esc(c.phone || ''), right: esc(c.type) }; }); }, onPick: function (x) { meta.customerId = x.id; cus.value = svc.cusName(x.id); cinfo(); } });
   cus.addEventListener('input', function () { if (!cus.value.trim()) { meta.customerId = ''; cinfo(); } });
   $('#ncus', host).onclick = function () {

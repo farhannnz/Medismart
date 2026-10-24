@@ -1,6 +1,13 @@
 # Medismart (PharmaDesk) – kaise use karein
 
-**Login:** username `admin`  |  password `admin`  (pehle login ke baad Tools → Users && Rights me password badal lo)
+**Logins (demo data ke saath):**
+| Kaun | Username | Password | Kya dikhta hai |
+|---|---|---|---|
+| Shop Admin (owner, sirf ek) | `admin` | `admin` | sab kuch |
+| Counter Staff | `staff` | `staff` | billing, request, receive (jo rights diye) |
+| Warehouse Manager | `warehouse` | `warehouse` | sirf Warehouse menu (requests approve + dispatch) |
+
+Pehle login ke baad Tools → Users && Rights me passwords badal do. Naya staff: wahin "Add user" (role Staff ya Warehouse, rights tick). **Admin sirf ek hota hai** – doosra Admin banane ya Admin ko disable karne se software rok deta hai.
 
 Software browser me chalta hai. Folder me `index.html` double-click karo, ya Vercel/GitHub Pages pe host karo. Data usi browser me save hota hai (IndexedDB), isliye roz **File → Backup && Restore** se backup lo.
 
@@ -29,13 +36,15 @@ Software browser me chalta hai. Folder me `index.html` double-click karo, ya Ver
 7. Customer ruka ho to **Stand by**; baad me **Held** se recall. **Previous / Display / Next** purane bills dikhate hain.
 8. Wapsi: **Sale → Sales Return**.
 
-### Purchase (supplier se maal)
-1. Maal pehle aaya, bill baad me: **Purchase → Delivery Note** me supplier, batch, expiry, qty daalo → Save.
-2. Bill aane par **Purchase → Purchase Invoice** (F4): Date, Invoice No, Supplier chuno. Delivery Note box se note chuno → **Import**.
-3. Grid me rate, MRP, disc, GST bharo. Qty box ya strip dono me de sakte ho; free qty alag column me. **Cash purchase** tick karo agar nakad diya.
-4. **Save** → stock badh jaata hai, supplier ka payable account me chadh jaata hai.
-5. Order dena ho: **Order → Purchase Order** ya **Auto Create Order** (reorder / sales ratio se suggest).
-6. Maal wapas: **Purchase → Purchase Return**.
+### Stock kahan se aata hai – Warehouse flow (sabse zaroori)
+Shop ka stock **sirf warehouse se** aata hai (direct supplier purchase band hai; chahiye to Tools → Options → "Also allow direct supplier purchase" tick karo).
+
+1. **Shop:** Order → **Stock Request to Warehouse** (F3). Item chuno, box/strip me qty likho (ya **Auto Fill** = jo reorder level se neeche hai woh sab). Dikhta hai: shop me kitna hai, warehouse me kitna hai. **Send Request**.
+2. **Warehouse:** `warehouse` se login → **Incoming Requests**. Request chuno, har item ki approve qty aur transfer rate dekho/badlo → **Approve & Dispatch** (ya **Reject** with reason). Batch apne aap first-expiry-first-out se uthte hain, challan print hota hai. Is waqt shop ka stock **nahi** badhta.
+3. **Shop:** Purchase → **Receive Stock from Warehouse** (F4). Dispatch chuno, maal gino, **Received** me asli qty likho (kam aaya to kam likho – kami warehouse ko wapas chali jaati hai) → **Receive**. Ab shop ka stock badhta hai, GST input aur warehouse ka payable account me chadh jaata hai.
+4. **Paise:** Purchase → **Warehouse Account (what we owe)** me hisaab; Accounts → Ledger me **Pay** voucher se payment karo. Maal wapas: Purchase → Purchase Return (warehouse ke paas wapas chala jaata hai).
+5. **Warehouse ka apna stock:** Warehouse → **Add Warehouse Stock** (batch + expiry + transfer rate) / **Warehouse Stock** (item-wise).
+6. Warehouse aur shop **alag computer** pe hon to: shop request ko "Export request file" karke bheje, warehouse "Import request file" kare; dispatch ko "Export file" karke bheje, shop "Import dispatch file" kare. Dono taraf item ke naam same hone chahiye. (Live sync ke liye baad me warehouse management/server banayenge.)
 
 ### Stock
 - **Stock → Current Stock** (value ke saath), **Stock Statement** (opening/purchase/sale/closing).
@@ -51,5 +60,15 @@ Software browser me chalta hai. Folder me `index.html` double-click karo, ya Ver
 ### Reports (Tools → Reports, F7)
 Sales register, item-wise sales, GST report, Schedule H/H1/X register, doctor/customer-wise, purchase reports, reorder list, fast/slow moving, expiry report, customer/supplier outstanding, month-wise profit. Har report ko CSV / Print kar sakte ho.
 
+## Attendance (staff)
+- Staff login karte hi **Punch In** ho jaata hai (late ho to orange "late"). Logout/Exit pe **Punch Out**.
+- File → **Attendance** ya toolbar ke icon se apni attendance, ghante aur mahine ka register dekho; kabhi bhi manually Punch In/Out.
+- **Admin** sabka register dekhta hai (P/A/L/H), kisi bhi din ka cell click karke Present/Absent/Leave/Half-day, time aur note edit kar sakta hai, CSV nikal sakta hai. Shift time aur grace Tools → Options me.
+
+## Alerts / notifications
+- Right side **Messages** panel aur status bar ka 🔔 count: expire ho chuka maal (red), 90 din me expire hone wala, reorder se kam stock, warehouse se aaya dispatch jo receive karna hai, rejected request, udhaar baaki, warehouse ko dena, aaj attendance nahi lagi. Click karo to seedha wahi window khulti hai. Login pe bhi toast aata hai.
+- Bill me **dawa jo bina prescription nahi** (Schedule H = laal text + Rx, H1/X = laal highlight + doctor ka naam zaroori). Expire hone wala batch Exp cell me peela (90 din), expired laal.
+- **Customer History** (Sale → Customer History, ya bill me customer ke saamne "history"): kitni baar aaya, kya kya kharida (kitni baar), doctor, udhaar, saare bills.
+
 ## Roz ka routine (short)
-Subah: Expiry Watch + Reorder List → Din bhar: Sales Bill → Maal aaye: Delivery Note → Bill aaye: Purchase Invoice → Sham: Day Book check → Hafte me: Backup.
+Subah: Expiry Watch + Reorder List → Din bhar: Sales Bill → Stock kam: Stock Request → Maal aaye: Receive Stock → Sham: Day Book check → Hafte me: Backup.

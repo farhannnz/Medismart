@@ -58,7 +58,7 @@ PD.save = function () { clearTimeout(saveTimer); saveTimer = setTimeout(PD.flush
 addEventListener('beforeunload', function () { if (PD.DB) PD.flush(); });
 
 /* ---------- blank database ---------- */
-PD.RIGHTS = [['dashboard', 'Dashboard'], ['billing', 'Sales billing'], ['salesret', 'Sales returns'], ['purchase', 'Purchase invoices'], ['orders', 'Purchase orders & delivery notes'], ['stock', 'Stock, opening stock & batch edit'], ['expiry', 'Expiry, damage & claims'], ['explore', 'Product explorer'], ['reports', 'Reports'], ['accounts', 'Accounts'], ['masters', 'Masters'], ['settings', 'Settings & backup'], ['users', 'Users & activity log']];
+PD.RIGHTS = [['dashboard', 'Dashboard'], ['billing', 'Sales billing'], ['salesret', 'Sales returns'], ['purchase', 'Purchase invoices'], ['orders', 'Purchase orders & delivery notes'], ['stock', 'Stock, opening stock & batch edit'], ['expiry', 'Expiry, damage & claims'], ['explore', 'Product explorer'], ['reports', 'Reports'], ['accounts', 'Accounts'], ['masters', 'Masters'], ['settings', 'Settings & backup'], ['users', 'Users & activity log'], ['requests', 'Stock requests & receiving from warehouse'], ['warehouse', 'Warehouse (approve, dispatch, stock)'], ['attendance', 'Attendance register (see everyone)']];
 PD.CATS = ['Allopathy', 'Ayurvedic', 'Homoeopathy', 'Veterinary', 'Other'];
 PD.SCHEDULES = ['', 'G', 'H', 'H1', 'X', 'OTC'];
 PD.blank = function () {
@@ -71,10 +71,10 @@ PD.blank = function () {
       multiSeries: true, showProfit: false, rounding: true, expiryDays: 90, theme: 'light', accent: '#0e9f8e', density: 'cozy',
       defaultTax: 12, series: { Allopathy: 'A', Ayurvedic: 'AY', Homoeopathy: 'H', Veterinary: 'V', Other: 'O' },
       catColors: { Allopathy: '#0f766e', Ayurvedic: '#b45309', Homoeopathy: '#7c3aed', Veterinary: '#be123c', Other: '#475569' },
-      scheduleColors: true, colsPref: {}, printWidth: '80mm'
+      scheduleColors: true, colsPref: {}, printWidth: '80mm', allowDirect: false, autoPunch: true, whName: 'Main Warehouse', shiftStart: '09:00', graceMin: 15
     },
     items: [], mfrs: [], suppliers: [], customers: [], doctors: [], batches: [], moves: [], purchases: [], preturns: [], pos: [], dnotes: [],
-    sales: [], sreturns: [], holds: [], damage: [], offers: [], openings: [], accounts: [
+    sales: [], sreturns: [], holds: [], damage: [], whBatches: [], requests: [], dispatches: [], attendance: [], offers: [], openings: [], accounts: [
       { id: 'cash', name: 'Cash in Hand', group: 'Cash', nat: 'A', sys: 1 }, { id: 'bank', name: 'Bank / UPI / Card', group: 'Bank', nat: 'A', sys: 1 },
       { id: 'sales', name: 'Sales', group: 'Sales', nat: 'I', sys: 1 }, { id: 'purchase', name: 'Purchase', group: 'Purchase', nat: 'E', sys: 1 },
       { id: 'salesret', name: 'Sales Return', group: 'Sales', nat: 'E', sys: 1 }, { id: 'purret', name: 'Purchase Return', group: 'Purchase', nat: 'I', sys: 1 },
