@@ -41,8 +41,8 @@ function migrate() {
   Object.keys(B).forEach(function (k) { if (D[k] === undefined) D[k] = B[k]; });
   Object.keys(B.settings).forEach(function (k) { if (D.settings[k] === undefined) D.settings[k] = B.settings[k]; });
   svc.currentYear(); svc.warehouse(); svc.seedWarehouse();
-  /* roles: exactly one Admin; a ready Warehouse login in demo data */
-  if (D.demo && !D.users.some(function (u) { return u.role === 'Warehouse'; })) D.users.push({ id: 'u_wh', name: 'Warehouse Manager', username: 'warehouse', pass: PD.hash('warehouse'), role: 'Warehouse', rights: { warehouse: true, attendance: false }, active: true });
+  /* roles: exactly one Admin (the shop owner) + staff */
+  D.users = D.users.filter(function (u) { return u.role !== 'Warehouse'; });
   if (D.demo && !D.users.some(function (u) { return u.username === 'staff'; })) D.users.push({ id: 'u_st', name: 'Counter Staff', username: 'staff', pass: PD.hash('staff'), role: 'Staff', rights: { dashboard: true, billing: true, salesret: true, explore: true, requests: true, expiry: true }, active: true });
 }
 
@@ -91,8 +91,6 @@ var MENUS = [
     ['Current Stock', 'stock', { tab: 'list' }, 'F5'], ['Opening Stock', 'stock', { tab: 'open' }], ['Batch Edit', 'batchedit'], ['Stock Statement', 'stock', { tab: 'flow' }], '-',
     ['Expiry Watch', 'expiry', { tab: 'watch' }], ['Expiry Transfer', 'expiry', { tab: 'dmg' }], ['Expiry Claim', 'expclaim'], ['Supplier Claims (list)', 'expiry', { tab: 'claims' }], ['Expiry Report', 'reports', { report: 'expiry-rep' }], '-',
     ['Fast && Slow Moving', 'reports', { report: 'moving' }], ['Item Stock Flow', 'reports', { report: 'flow-item' }]]],
-  ['Warehouse', [
-    ['Incoming Requests', 'whreq'], ['Dispatch History', 'whreq', { tab: 'hist' }], '-', ['Warehouse Stock', 'whstock'], ['Add Warehouse Stock', 'whstock']]],
   ['Accounts', [
     ['Ledger', 'accounts', { tab: 'ledger' }, 'F8'], ['Day Book', 'accounts', { tab: 'daybook' }], ['Trial Balance', 'accounts', { tab: 'tb' }], ['Profit && Loss / Balance Sheet', 'accounts', { tab: 'pnl' }], ['Receivables && Payables', 'accounts', { tab: 'dues' }], '-',
     ['Account Heads', 'accounts', { tab: 'heads' }], ['New Accounting Year', 'accounts', { tab: 'year' }], '-',
@@ -116,8 +114,8 @@ var TOOLS = [
   ['Item master', 'pill', 'itemdlg', '#2f6fb3'], ['Supplier master', 'users', 'masters:suppliers', '#2e8b57'], ['Customer master', 'users', 'masters:customers', '#c77d00'], ['Account details', 'book', 'acctdlg', '#7b5ea7'], '|',
   ['Reports (F7)', 'report', 'reports', '#1e88a8'], ['Day book', 'book', 'accounts:daybook', '#8a5a2b'], ['Ledger (F8)', 'book', 'accounts:ledger', '#2f6fb3'], ['Explorer view (F6)', 'explore', 'explore', '#2e8b57'], ['Attendance', 'users', 'attendance', '#2e8b57'], ['Settings', 'gear', 'settings', '#666']
 ];
-var TITLES = {}; NAV.forEach(function (g) { g[1].forEach(function (i) { TITLES[i[0]] = i[1]; }); }); TITLES.home = 'PharmaDesk'; TITLES.dnote = 'Delivery Note'; TITLES.batchedit = 'Batch Edit'; TITLES.expclaim = 'ExpiryClaim'; TITLES.itemdlg = 'Item'; TITLES.acctdlg = 'Account Details'; TITLES.request = 'Stock Request'; TITLES.reqlist = 'Request List'; TITLES.receive = 'Receive Stock'; TITLES.whstock = 'Warehouse Stock'; TITLES.whreq = 'Warehouse Requests'; TITLES.attendance = 'Attendance'; TITLES.custhist = 'Customer History';
-var RIGHT = { dnote: 'orders', batchedit: 'stock', expclaim: 'expiry', itemdlg: 'masters', acctdlg: 'accounts', request: 'requests', reqlist: 'requests', receive: 'requests', whstock: 'warehouse', whreq: 'warehouse', custhist: 'billing' };
+var TITLES = {}; NAV.forEach(function (g) { g[1].forEach(function (i) { TITLES[i[0]] = i[1]; }); }); TITLES.home = 'PharmaDesk'; TITLES.dnote = 'Delivery Note'; TITLES.batchedit = 'Batch Edit'; TITLES.expclaim = 'ExpiryClaim'; TITLES.itemdlg = 'Item'; TITLES.acctdlg = 'Account Details'; TITLES.request = 'Stock Request'; TITLES.reqlist = 'Request List'; TITLES.receive = 'Receive Stock'; TITLES.attendance = 'Attendance'; TITLES.custhist = 'Customer History';
+var RIGHT = { dnote: 'orders', batchedit: 'stock', expclaim: 'expiry', itemdlg: 'masters', acctdlg: 'accounts', request: 'requests', reqlist: 'requests', receive: 'requests', custhist: 'billing' };
 var wins = [], cur = 'home', docks = { items: true, mfrs: false, sups: false, msg: true }, ui = { toolbar: true, status: true };
 PD.go = function (route, arg) { openWin(route, arg); };
 
@@ -180,7 +178,6 @@ function shell() {
 }
 function landing(fresh) {
   wins = []; cur = 'home';
-  if (PD.user.role === 'Warehouse') openWin('whreq');
   if (fresh) { var a = PD.alerts().filter(function (x) { return x.lvl !== 'info'; }); if (a.length && PD.toast) PD.toast('🔔 ' + a.length + ' alert' + (a.length > 1 ? 's' : '') + ': ' + a[0].text + (a.length > 1 ? ' …see Messages panel' : ''), a[0].lvl === 'bad' ? 'err' : ''); }
 }
 PD.refreshAlerts = function () { var n = PD.alerts(), b = $('#bell'); if (b) { var hot = n.filter(function (x) { return x.lvl !== 'info'; }).length; b.textContent = '🔔 ' + n.length; b.className = 'bell' + (hot ? ' hot' : ''); } if (docks.msg) fillDock('msg', ''); };

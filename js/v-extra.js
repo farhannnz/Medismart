@@ -21,10 +21,7 @@ PD.alerts = function () {
   if (can('requests')) {
     var tr = D.dispatches.filter(function (d) { return d.status === 'In transit'; }).length; if (tr) out.push({ lvl: 'info', text: tr + ' dispatch(es) from the warehouse waiting to be received', go: ['receive'], icon: 'cart' });
     var rj = D.requests.filter(function (r) { return r.status === 'Rejected' && r.date >= PD.addDays(PD.today(), -3); }).length; if (rj) out.push({ lvl: 'warn', text: rj + ' stock request(s) rejected by the warehouse recently', go: ['reqlist'], icon: 'alert' });
-    var pr = D.requests.filter(function (r) { return r.status === 'Pending'; }).length; if (pr && !can('warehouse')) out.push({ lvl: 'info', text: pr + ' request(s) still waiting for warehouse approval', go: ['reqlist'], icon: 'order' });
-  }
-  if (can('warehouse')) {
-    var pw = D.requests.filter(function (r) { return r.status === 'Pending'; }).length; if (pw) out.push({ lvl: 'warn', text: pw + ' stock request(s) waiting for your approval', go: ['whreq'], icon: 'order' });
+    var pr = D.requests.filter(function (r) { return r.status === 'Pending'; }).length; if (pr) out.push({ lvl: 'info', text: pr + ' request(s) still waiting for warehouse approval', go: ['reqlist'], icon: 'order' });
   }
   if (can('accounts')) {
     var rec = 0; D.customers.forEach(function (c) { var b = svc.partyBalance('cus', c.id); if (b > 0) rec += b; });

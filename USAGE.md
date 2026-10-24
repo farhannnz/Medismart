@@ -1,15 +1,12 @@
 # Medismart (PharmaDesk) – kaise use karein
 
-**Logins (demo data ke saath):**
+**Demo login (isi se check karo):**
 | Kaun | Username | Password | Kya dikhta hai |
 |---|---|---|---|
 | Shop Admin (owner, sirf ek) | `admin` | `admin` | sab kuch |
-| Counter Staff | `staff` | `staff` | billing, request, receive (jo rights diye) |
-| Warehouse Manager | `warehouse` | `warehouse` | sirf Warehouse menu (requests approve + dispatch) |
+| Counter Staff | `staff` | `staff` | billing, stock request, receive, expiry (jo rights diye) |
 
-Pehle login ke baad Tools → Users && Rights me passwords badal do. Naya staff: wahin "Add user" (role Staff ya Warehouse, rights tick). **Admin sirf ek hota hai** – doosra Admin banane ya Admin ko disable karne se software rok deta hai.
-
-Software browser me chalta hai. Folder me `index.html` double-click karo, ya Vercel/GitHub Pages pe host karo. Data usi browser me save hota hai (IndexedDB), isliye roz **File → Backup && Restore** se backup lo.
+Pehle login ke baad Tools → Users && Rights me passwords badal do. Naya staff: wahin "Add user" (rights tick karo). **Admin sirf ek hota hai** – doosra Admin banane ya Admin ko disable karne se software rok deta hai. Warehouse **alag software** hai, isme uska login/menu nahi hai.
 
 ## Screen ka layout
 - **Menu bar:** File, Create, List, Order, Purchase, Sale, Stock, Accounts, View, Navigate, Tools, Window, Help.
@@ -36,15 +33,19 @@ Software browser me chalta hai. Folder me `index.html` double-click karo, ya Ver
 7. Customer ruka ho to **Stand by**; baad me **Held** se recall. **Previous / Display / Next** purane bills dikhate hain.
 8. Wapsi: **Sale → Sales Return**.
 
-### Stock kahan se aata hai – Warehouse flow (sabse zaroori)
-Shop ka stock **sirf warehouse se** aata hai (direct supplier purchase band hai; chahiye to Tools → Options → "Also allow direct supplier purchase" tick karo).
+### Stock kahan se aata hai – Warehouse (alag software) se
+Shop ka stock **sirf warehouse se** aata hai (direct supplier purchase band hai; chahiye to Tools → Options → "Also allow direct supplier purchase" tick karo). Warehouse ka apna alag software hai; dono ke beech abhi **file se haath-badal** hota hai (baad me live server/API laga denge).
 
-1. **Shop:** Order → **Stock Request to Warehouse** (F3). Item chuno, box/strip me qty likho (ya **Auto Fill** = jo reorder level se neeche hai woh sab). Dikhta hai: shop me kitna hai, warehouse me kitna hai. **Send Request**.
-2. **Warehouse:** `warehouse` se login → **Incoming Requests**. Request chuno, har item ki approve qty aur transfer rate dekho/badlo → **Approve & Dispatch** (ya **Reject** with reason). Batch apne aap first-expiry-first-out se uthte hain, challan print hota hai. Is waqt shop ka stock **nahi** badhta.
-3. **Shop:** Purchase → **Receive Stock from Warehouse** (F4). Dispatch chuno, maal gino, **Received** me asli qty likho (kam aaya to kam likho – kami warehouse ko wapas chali jaati hai) → **Receive**. Ab shop ka stock badhta hai, GST input aur warehouse ka payable account me chadh jaata hai.
-4. **Paise:** Purchase → **Warehouse Account (what we owe)** me hisaab; Accounts → Ledger me **Pay** voucher se payment karo. Maal wapas: Purchase → Purchase Return (warehouse ke paas wapas chala jaata hai).
-5. **Warehouse ka apna stock:** Warehouse → **Add Warehouse Stock** (batch + expiry + transfer rate) / **Warehouse Stock** (item-wise).
-6. Warehouse aur shop **alag computer** pe hon to: shop request ko "Export request file" karke bheje, warehouse "Import request file" kare; dispatch ko "Export file" karke bheje, shop "Import dispatch file" kare. Dono taraf item ke naam same hone chahiye. (Live sync ke liye baad me warehouse management/server banayenge.)
+1. **Shop:** Order → **Stock Request to Warehouse** (F3). Item chuno, box/strip me qty likho (ya **Auto Fill** = jo reorder level se neeche hai). **Send Request**.
+2. Order → **Request Status / List** → request pe click → **Export request file** → ye `.request.json` warehouse software ko do.
+3. **Warehouse software** request approve karke apni **dispatch file** (`.dispatch.json`) deta hai. Is waqt shop ka stock **nahi** badhta.
+4. **Shop:** Purchase → **Receive Stock from Warehouse** (F4) → **Import dispatch file**. Maal gino, **Received** me asli qty likho (kam aaya to kam likho, kami dispatch pe "short" likhi jaati hai) → **Receive**. Ab shop ka stock badhta hai, GST input aur warehouse ka payable account me chadh jaata hai.
+5. **Paise:** Purchase → **Warehouse Account (what we owe)**; Accounts → Ledger me **Pay** voucher. Maal wapas: Purchase → Purchase Return.
+6. **Demo me bina warehouse software ke check karna:** Request List me pending request kholo → **Demo: simulate warehouse dispatch** → phir Receive Stock.
+
+**File format (warehouse software ke liye):**
+- Request file (shop → warehouse): `{ "type":"request", "shop":"<shop naam>", "no":"RQ-000001", "date":"YYYY-MM-DD", "note":"", "lines":[{ "name":"<item naam>", "qty":2, "unit":"purchase|sale" }] }`
+- Dispatch file (warehouse → shop): `{ "type":"dispatch", "warehouse":"<naam>", "no":"DC-000001", "date":"YYYY-MM-DD", "requestNo":"RQ-000001", "by":"", "note":"", "lines":[{ "name":"<item naam>", "reqIdx":0, "batchNo":"B1", "expiry":"YYYY-MM", "mrp":50, "rate":36, "qty":20, "tax":12 }] }` — `qty` aur `rate` **sale unit (strip) ke hisaab se**; item ka naam shop ki item list se exactly match hona chahiye.
 
 ### Stock
 - **Stock → Current Stock** (value ke saath), **Stock Statement** (opening/purchase/sale/closing).
@@ -71,4 +72,4 @@ Sales register, item-wise sales, GST report, Schedule H/H1/X register, doctor/cu
 - **Customer History** (Sale → Customer History, ya bill me customer ke saamne "history"): kitni baar aaya, kya kya kharida (kitni baar), doctor, udhaar, saare bills.
 
 ## Roz ka routine (short)
-Subah: Expiry Watch + Reorder List → Din bhar: Sales Bill → Stock kam: Stock Request → Maal aaye: Receive Stock → Sham: Day Book check → Hafte me: Backup.
+Subah: Expiry Watch + Reorder List → Din bhar: Sales Bill → Stock kam: Stock Request → warehouse ki dispatch file aaye: Receive Stock → Sham: Day Book check → Hafte me: Backup.

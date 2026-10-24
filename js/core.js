@@ -58,7 +58,7 @@ PD.save = function () { clearTimeout(saveTimer); saveTimer = setTimeout(PD.flush
 addEventListener('beforeunload', function () { if (PD.DB) PD.flush(); });
 
 /* ---------- blank database ---------- */
-PD.RIGHTS = [['dashboard', 'Dashboard'], ['billing', 'Sales billing'], ['salesret', 'Sales returns'], ['purchase', 'Purchase invoices'], ['orders', 'Purchase orders & delivery notes'], ['stock', 'Stock, opening stock & batch edit'], ['expiry', 'Expiry, damage & claims'], ['explore', 'Product explorer'], ['reports', 'Reports'], ['accounts', 'Accounts'], ['masters', 'Masters'], ['settings', 'Settings & backup'], ['users', 'Users & activity log'], ['requests', 'Stock requests & receiving from warehouse'], ['warehouse', 'Warehouse (approve, dispatch, stock)'], ['attendance', 'Attendance register (see everyone)']];
+PD.RIGHTS = [['dashboard', 'Dashboard'], ['billing', 'Sales billing'], ['salesret', 'Sales returns'], ['purchase', 'Purchase invoices'], ['orders', 'Purchase orders & delivery notes'], ['stock', 'Stock, opening stock & batch edit'], ['expiry', 'Expiry, damage & claims'], ['explore', 'Product explorer'], ['reports', 'Reports'], ['accounts', 'Accounts'], ['masters', 'Masters'], ['settings', 'Settings & backup'], ['users', 'Users & activity log'], ['requests', 'Stock requests & receiving from warehouse'], ['attendance', 'Attendance register (see everyone)']];
 PD.CATS = ['Allopathy', 'Ayurvedic', 'Homoeopathy', 'Veterinary', 'Other'];
 PD.SCHEDULES = ['', 'G', 'H', 'H1', 'X', 'OTC'];
 PD.blank = function () {
