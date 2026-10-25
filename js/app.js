@@ -5,11 +5,11 @@ var PD = window.PD, esc = PD.esc, svc = PD.svc, $ = PD.$, $$ = PD.$$;
 
 var NAV = [
   ['Overview', [['dashboard', 'Dashboard', 'dash', 'F1']]],
-  ['Sales', [['billing', 'Sales Billing', 'bill', 'F2'], ['salesret', 'Sales Returns', 'ret', '']]],
-  ['Purchase', [['purchase', 'Purchase Invoice', 'cart', 'F4'], ['orders', 'Orders & Delivery', 'order', '']]],
-  ['Inventory', [['stock', 'Stock & Batches', 'box', 'F5'], ['expiry', 'Expiry & Claims', 'clock', ''], ['explore', 'Product Explorer', 'explore', 'F6']]],
+  ['Sales', [['billing', 'Sales Bill', 'bill', 'F2'], ['salesret', 'Sales Return', 'ret', ''], ['custhist', 'Customer History', 'users', '']]],
+  ['Warehouse', [['request', 'Stock Request', 'order', 'F3'], ['reqlist', 'Request List', 'order', ''], ['receive', 'Receive Stock', 'cart', 'F4']]],
+  ['Stock', [['stock', 'Current Stock', 'box', 'F5'], ['shelves', 'Shelves', 'box', ''], ['expiry', 'Expiry Watch', 'clock', ''], ['expclaim', 'Return Expired Stock', 'clock', '']]],
   ['Insights', [['reports', 'Reports', 'report', 'F7'], ['accounts', 'Accounts', 'book', 'F8']]],
-  ['Setup', [['masters', 'Masters', 'users', ''], ['settings', 'Settings & Users', 'gear', '']]]
+  ['Setup', [['attendance', 'Attendance', 'users', ''], ['settings', 'Settings & Staff', 'gear', '']]]
 ];
 var TITLES = {}; NAV.forEach(function (g) { g[1].forEach(function (i) { TITLES[i[0]] = i[1]; }); });
 
@@ -40,7 +40,7 @@ function migrate() {
   var B = PD.blank(), D = PD.DB;
   Object.keys(B).forEach(function (k) { if (D[k] === undefined) D[k] = B[k]; });
   Object.keys(B.settings).forEach(function (k) { if (D.settings[k] === undefined) D.settings[k] = B.settings[k]; });
-  svc.currentYear(); svc.warehouse(); svc.seedWarehouse();
+  svc.currentYear(); svc.warehouse(); svc.seedWarehouse(); svc.seedNewMedDemo();
   /* roles: exactly one Admin (the shop owner) + staff */
   D.users = D.users.filter(function (u) { return u.role !== 'Warehouse'; });
   if (D.demo && !D.users.some(function (u) { return u.username === 'staff'; })) D.users.push({ id: 'u_st', name: 'Counter Staff', username: 'staff', pass: PD.hash('staff'), role: 'Staff', rights: { dashboard: true, billing: true, salesret: true, explore: true, requests: true, expiry: true }, active: true });
@@ -65,57 +65,42 @@ PD.logout = function () { if (PD.user && PD.DB.settings.autoPunch) svc.punchOut(
 /* ---------- shell: classic MDI desktop (menu bar, toolbar, window tabs, docked lists, status bar) ---------- */
 var MENUS = [
   ['File', [
-    ['New Sale Bill', 'billing', { fresh: 1 }, 'F2'], ['New Purchase Invoice', 'purchase', { tab: 'new' }, 'F4'], '-',
-    ['Accounting Year', 'accounts', { tab: 'year' }], ['Backup && Restore', 'settings', { tab: 'data' }], ['Activity Log', 'settings', { tab: 'log' }], '-', ['Attendance (Punch In / Out)', 'attendance'], '-',
+    ['New Sale Bill', 'billing', { fresh: 1 }, 'F2'], ['Attendance (Punch In / Out)', 'attendance'], '-',
+    ['Backup && Restore', 'settings', { tab: 'data' }], ['Activity Log', 'settings', { tab: 'log' }], '-',
     ['Change User', 'logout'], ['Exit', 'logout']]],
-  ['Create', [
-    ['Item', 'itemdlg'], ['Manufacturer', 'masters', { tab: 'mfrs' }], ['Supplier', 'masters', { tab: 'suppliers' }], ['Customer', 'masters', { tab: 'customers' }], ['Doctor', 'masters', { tab: 'doctors' }], '-',
-    ['Account Details', 'acctdlg'], ['Manufacturer Offer', 'masters', { tab: 'offers' }], '-',
-    ['Receipt Voucher', 'accounts', { tab: 'ledger', voucher: 'receipt' }], ['Payment Voucher', 'accounts', { tab: 'ledger', voucher: 'payment' }], ['Journal Voucher', 'accounts', { tab: 'ledger', voucher: 'journal' }]]],
-  ['List', [
-    ['Item List', 'masters', { tab: 'items' }], ['Manufacturer List', 'masters', { tab: 'mfrs' }], ['Suppliers List', 'masters', { tab: 'suppliers' }], ['Customer List', 'masters', { tab: 'customers' }], ['Doctor List', 'masters', { tab: 'doctors' }], ['Account List', 'accounts', { tab: 'heads' }], '-',
-    ['Invoice List', 'purchase', { tab: 'list' }], ['Sales Register', 'reports', { report: 'sales-reg' }]]],
-  ['Order', [
-    ['Stock Request to Warehouse', 'request', null, 'F3'], ['Auto Fill Request (reorder)', 'request', { auto: 1 }], ['Request Status / List', 'reqlist'], '-',
-    ['Reorder List', 'reports', { report: 'reorder' }], ['Manufacturer Offers', 'masters', { tab: 'offers' }], '-',
-    ['Purchase Order (direct supplier)', 'orders', { tab: 'po' }, '', 'direct'], ['Auto Create Order (direct supplier)', 'orders', { tab: 'auto' }, '', 'direct']]],
-  ['Purchase', [
-    ['Receive Stock from Warehouse', 'receive', null, 'F4'], ['Purchase Return (to Warehouse)', 'purchase', { tab: 'ret' }], ['Warehouse Account (what we owe)', 'accounts', { tab: 'ledger', acc: 'sup_wh' }], '-',
-    ['Purchase Invoice (direct supplier)', 'purchase', { tab: 'new' }, '', 'direct'], ['Delivery Note (direct supplier)', 'dnote', null, '', 'direct'], '-',
-    ['Purchase Report - Invoice wise', 'reports', { report: 'pur-reg' }], ['Purchase Report - Item wise', 'reports', { report: 'pur-item' }], ['Purchase Tax Report', 'reports', { report: 'pur-tax' }], ['Warehouse wise Purchases', 'reports', { report: 'pur-sup' }]]],
   ['Sale', [
     ['Sales Bill', 'billing', { fresh: 1 }, 'F2'], ['Sales Return', 'salesret'], ['Customer History', 'custhist'], '-',
-    ['Sales e-file', 'reports', { report: 'sales-reg' }], ['Items Sold', 'reports', { report: 'sales-item' }], ['Sales Tax Report', 'reports', { report: 'sales-tax' }], ['Daily Sales Voucher', 'reports', { report: 'sales-day' }],
-    ['Doctor wise Sales', 'reports', { report: 'sales-doc' }], ['Customer wise Sales', 'reports', { report: 'sales-cus' }], ['Schedule H/H1/X Register', 'reports', { report: 'sched-reg' }]]],
+    ['Sales Register', 'reports', { report: 'sales-reg' }], ['Items Sold', 'reports', { report: 'sales-item' }], ['Sales Tax Report', 'reports', { report: 'sales-tax' }],
+    ['Doctor wise Sales', 'reports', { report: 'sales-doc' }], ['Schedule H/H1/X Register', 'reports', { report: 'sched-reg' }]]],
   ['Stock', [
-    ['Current Stock', 'stock', { tab: 'list' }, 'F5'], ['Opening Stock', 'stock', { tab: 'open' }], ['Batch Edit', 'batchedit'], ['Stock Statement', 'stock', { tab: 'flow' }], '-',
-    ['Expiry Watch', 'expiry', { tab: 'watch' }], ['Expiry Transfer', 'expiry', { tab: 'dmg' }], ['Expiry Claim', 'expclaim'], ['Supplier Claims (list)', 'expiry', { tab: 'claims' }], ['Expiry Report', 'reports', { report: 'expiry-rep' }], '-',
-    ['Fast && Slow Moving', 'reports', { report: 'moving' }], ['Item Stock Flow', 'reports', { report: 'flow-item' }]]],
+    ['Current Stock', 'stock', { tab: 'list' }, 'F5'], ['Shelves', 'shelves'], ['Stock Statement', 'stock', { tab: 'flow' }], '-',
+    ['Expiry Watch', 'expiry', { tab: 'watch' }], ['Return Expired Stock to Warehouse', 'expclaim'], '-',
+    ['Reorder List', 'reports', { report: 'reorder' }], ['Fast && Slow Moving', 'reports', { report: 'moving' }]]],
+  ['Warehouse', [
+    ['Stock Request', 'request', null, 'F3'], ['Auto Fill Request (low stock)', 'request', { auto: 1 }], ['Request List', 'reqlist'], '-',
+    ['Receive Stock', 'receive', null, 'F4'], ['Import Item List from Warehouse', 'itemsimport'], '-',
+    ['Return Stock to Warehouse', 'purchase', { tab: 'ret' }], ['Warehouse Account (what we owe)', 'accounts', { tab: 'ledger', acc: 'sup_wh' }],
+    ['Purchase Report', 'reports', { report: 'pur-reg' }]]],
   ['Accounts', [
-    ['Ledger', 'accounts', { tab: 'ledger' }, 'F8'], ['Day Book', 'accounts', { tab: 'daybook' }], ['Trial Balance', 'accounts', { tab: 'tb' }], ['Profit && Loss / Balance Sheet', 'accounts', { tab: 'pnl' }], ['Receivables && Payables', 'accounts', { tab: 'dues' }], '-',
-    ['Account Heads', 'accounts', { tab: 'heads' }], ['New Accounting Year', 'accounts', { tab: 'year' }], '-',
-    ['Customer Outstanding', 'reports', { report: 'recv' }], ['Supplier Outstanding', 'reports', { report: 'pay' }], ['Profit Report (month)', 'reports', { report: 'profit-month' }]]],
-  ['View', [
-    ['Dashboard', 'dashboard', null, 'F1'], ['Explorer View', 'explore', null, 'F6'], '-',
-    ['Item List Panel', 'dock:items'], ['Manufacturer List Panel', 'dock:mfrs'], ['Suppliers List Panel', 'dock:sups'], ['Messages Panel', 'dock:msg'], '-',
-    ['Toolbar', 'toggle:toolbar'], ['Status Bar', 'toggle:status'], ['Dark Mode', 'toggle:dark']]],
-  ['Navigate', [
-    ['Home', 'home'], ['Previous Window', 'nav:-1', null, 'Ctrl+←'], ['Next Window', 'nav:1', null, 'Ctrl+→'], ['Close Window', 'closecur', null, 'Ctrl+W'], '-', ['Find Anything...', 'palette', null, 'Ctrl+I']]],
+    ['Day Book', 'accounts', { tab: 'daybook' }], ['Ledger', 'accounts', { tab: 'ledger' }, 'F8'], ['Profit && Loss / Balance Sheet', 'accounts', { tab: 'pnl' }], ['Receivables && Payables', 'accounts', { tab: 'dues' }], '-',
+    ['Customer Outstanding', 'reports', { report: 'recv' }], ['New Accounting Year', 'accounts', { tab: 'year' }]]],
   ['Tools', [
-    ['Reports', 'reports', null, 'F7'], ['Attendance Register', 'attendance'], ['Options', 'settings', { tab: 'shop' }], ['Appearance', 'settings', { tab: 'look' }], ['Users && Rights', 'settings', { tab: 'users' }], ['Backup && Data', 'settings', { tab: 'data' }]]],
+    ['Reports', 'reports', null, 'F7'], ['Staff && Rights', 'settings', { tab: 'users' }], ['Options', 'settings', { tab: 'shop' }], ['Attendance Register', 'attendance'], ['Backup && Data', 'settings', { tab: 'data' }]]],
+  ['View', [
+    ['Dashboard', 'dashboard', null, 'F1'], '-', ['Item List Panel', 'dock:items'], ['Messages Panel', 'dock:msg'], '-', ['Dark Mode', 'toggle:dark']]],
   ['Window', [['Close All Windows', 'closeall'], ['Close Other Windows', 'closeother'], '-', ['%wins']]],
-  ['Help', [['Help && Shortcuts', 'settings', { tab: 'help' }], ['Find Anything...', 'palette'], '-', ['About PharmaDesk', 'about']]]
+  ['Help', [['Help && Shortcuts', 'settings', { tab: 'help' }], ['Find Anything...', 'palette', null, 'Ctrl+I'], '-', ['About', 'about']]]
 ];
 /* toolbar: [title, icon, action, colour] */
 var TOOLS = [
-  ['Save (Ctrl+S)', 'check', 'save', '#2f6fb3'], ['Clear', 'x', 'clear', '#e0a100'], ['Close window', 'x', 'closecur', '#c62828'], ['Lock / Log out', 'lock', 'logout', '#7a8a2e'], '|',
-  ['Sales bill (F2)', 'bill', 'billing', '#2e8b57'], ['Sales return', 'ret', 'salesret', '#c77d00'], ['Receive stock (F4)', 'cart', 'receive', '#7b5ea7'], ['Stock request (F3)', 'order', 'request', '#1e88a8'], ['Stock (F5)', 'box', 'stock', '#8a5a2b'],
-  ['Expiry & claims', 'clock', 'expiry', '#d9534f'], '|',
-  ['Item master', 'pill', 'itemdlg', '#2f6fb3'], ['Supplier master', 'users', 'masters:suppliers', '#2e8b57'], ['Customer master', 'users', 'masters:customers', '#c77d00'], ['Account details', 'book', 'acctdlg', '#7b5ea7'], '|',
-  ['Reports (F7)', 'report', 'reports', '#1e88a8'], ['Day book', 'book', 'accounts:daybook', '#8a5a2b'], ['Ledger (F8)', 'book', 'accounts:ledger', '#2f6fb3'], ['Explorer view (F6)', 'explore', 'explore', '#2e8b57'], ['Attendance', 'users', 'attendance', '#2e8b57'], ['Settings', 'gear', 'settings', '#666']
+  ['Save', 'check', 'save', '#2f6fb3'], ['Clear', 'x', 'clear', '#e0a100'], ['Close window', 'x', 'closecur', '#c62828'], ['Log out', 'lock', 'logout', '#7a8a2e'], '|',
+  ['Sales bill (F2)', 'bill', 'billing', '#2e8b57'], ['Sales return', 'ret', 'salesret', '#c77d00'], ['Customer history', 'users', 'custhist', '#7b5ea7'], '|',
+  ['Stock request (F3)', 'order', 'request', '#1e88a8'], ['Receive stock (F4)', 'cart', 'receive', '#7b5ea7'], ['Stock (F5)', 'box', 'stock', '#8a5a2b'], ['Shelves', 'box', 'shelves', '#2e8b57'], ['Expiry watch', 'clock', 'expiry:watch', '#d9534f'], '|',
+  ['Reports (F7)', 'report', 'reports', '#1e88a8'], ['Day book', 'book', 'accounts:daybook', '#8a5a2b'], ['Ledger (F8)', 'book', 'accounts:ledger', '#2f6fb3'], '|',
+  ['Attendance', 'users', 'attendance', '#2e8b57'], ['Settings', 'gear', 'settings', '#666']
 ];
-var TITLES = {}; NAV.forEach(function (g) { g[1].forEach(function (i) { TITLES[i[0]] = i[1]; }); }); TITLES.home = 'PharmaDesk'; TITLES.dnote = 'Delivery Note'; TITLES.batchedit = 'Batch Edit'; TITLES.expclaim = 'ExpiryClaim'; TITLES.itemdlg = 'Item'; TITLES.acctdlg = 'Account Details'; TITLES.request = 'Stock Request'; TITLES.reqlist = 'Request List'; TITLES.receive = 'Receive Stock'; TITLES.attendance = 'Attendance'; TITLES.custhist = 'Customer History';
-var RIGHT = { dnote: 'orders', batchedit: 'stock', expclaim: 'expiry', itemdlg: 'masters', acctdlg: 'accounts', request: 'requests', reqlist: 'requests', receive: 'requests', custhist: 'billing' };
+var TITLES = {}; NAV.forEach(function (g) { g[1].forEach(function (i) { TITLES[i[0]] = i[1]; }); }); TITLES.home = 'PharmaDesk'; TITLES.shelves = 'Shelves'; TITLES.itemsimport = 'Import Item List'; TITLES.dnote = 'Delivery Note'; TITLES.batchedit = 'Batch Edit'; TITLES.expclaim = 'ExpiryClaim'; TITLES.itemdlg = 'Item'; TITLES.acctdlg = 'Account Details'; TITLES.request = 'Stock Request'; TITLES.reqlist = 'Request List'; TITLES.receive = 'Receive Stock'; TITLES.attendance = 'Attendance'; TITLES.custhist = 'Customer History';
+var RIGHT = { dnote: 'orders', batchedit: 'stock', expclaim: 'expiry', itemdlg: 'masters', acctdlg: 'accounts', shelves: 'stock', itemsimport: 'requests', request: 'requests', reqlist: 'requests', receive: 'requests', custhist: 'billing' };
 var wins = [], cur = 'home', docks = { items: true, mfrs: false, sups: false, msg: true }, ui = { toolbar: true, status: true };
 PD.go = function (route, arg) { openWin(route, arg); };
 
@@ -163,7 +148,7 @@ function shell() {
   document.body.className = 'mdi';
   document.body.innerHTML = '<div class="win"><div class="titlebar"><span class="ico">' + PD.icon('pill') + '</span><b>' + esc(PD.DB.shop.name) + '</b><span>Software Registered to ' + esc(PD.DB.shop.name) + '</span><span id="dbt"></span><span class="sp"></span><span class="wc">—&nbsp;&nbsp;▢&nbsp;&nbsp;✕</span></div>' +
     '<div class="menubar" id="mbar"></div><div class="toolbar" id="tbar">' + tb + '<span class="sp"></span><div class="msearch">' + PD.icon('search') + '<input id="gsr" placeholder="Search (Ctrl+I)" readonly></div></div>' +
-    '<div class="mdi-body"><div class="lstrip" id="lstrip"><button data-a="explore">ExplorerView</button><button data-a="stock:batch">Batch</button></div>' +
+    '<div class="mdi-body"><div class="lstrip" id="lstrip"><button data-a="shelves">Shelves</button><button data-a="receive">Receive</button></div>' +
     '<div class="mdi-main"><div class="wtabs" id="wtabs"></div><main class="view" id="view"></main></div><div class="docks" id="docks"></div></div>' +
     '<div class="statusbar" id="sbar"><span id="rc"></span><span class="sp"></span><span id="bell" class="bell" title="Alerts"></span><span class="usr">' + PD.icon('users') + esc(PD.user.name) + '</span><b class="plog">Pharma<em>Desk</em></b><span id="clk"></span></div></div>';
   var yr = svc.currentYear();
@@ -253,7 +238,7 @@ function renderWin() {
 function render() { renderWin(); }
 
 /* ---------- keyboard ---------- */
-var FKEYS = { F1: 'dashboard', F2: 'billing', F3: 'request', F4: 'receive', F5: 'stock', F6: 'explore', F7: 'reports', F8: 'accounts' };
+var FKEYS = { F1: 'dashboard', F2: 'billing', F3: 'request', F4: 'receive', F5: 'stock', F7: 'reports', F8: 'accounts' };
 addEventListener('keydown', function (e) {
   if (!PD.user) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); palette(); return; }

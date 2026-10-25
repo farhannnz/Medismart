@@ -14,6 +14,35 @@ svc.warehouse = function () {
   return s;
 };
 
+
+/* ---------- items arrive from the warehouse; the shop never creates them by hand ---------- */
+function mfrId(name) {
+  name = (name || '').trim(); if (!name) return '';
+  var m = D().mfrs.find(function (x) { return x.name.toLowerCase() === name.toLowerCase(); });
+  return m ? m.id : svc.saveMaster('mfrs', { name: name, city: '', active: true }).id;
+}
+function findItem(name) { name = String(name || '').trim().toLowerCase(); return D().items.find(function (i) { return i.name.toLowerCase() === name; }); }
+svc.upsertItem = function (l, forceNew) {
+  if (!l || !String(l.name || '').trim()) throw new Error('An item has no name');
+  var it = findItem(l.name), fresh = !it;
+  var v = { generic: l.generic, cat: l.cat, schedule: l.schedule, tax: l.tax, mrp: l.mrp, unit: l.unit, punit: l.punit, conv: l.conv, hsn: l.hsn, division: l.division, reorder: l.reorder };
+  if (l.mfr) v.mfrId = mfrId(l.mfr);
+  if (fresh) {
+    it = { name: String(l.name).trim(), generic: '', cat: PD.CATS[0], schedule: '', tax: D().settings.defaultTax, mrp: 0, unit: 'Strip', punit: 'Box', conv: 1, reorder: 10, margin: 20, rack: '', batch: true, active: true, fromWarehouse: true };
+  }
+  Object.keys(v).forEach(function (k) { if (v[k] !== undefined && v[k] !== null && v[k] !== '') it[k] = (k === 'tax' || k === 'mrp' || k === 'conv' || k === 'reorder') ? PD.num(v[k]) : v[k]; });
+  if (!(it.conv >= 1)) it.conv = 1;
+  if (fresh) { it = svc.saveMaster('items', it); }
+  return { item: it, fresh: fresh };
+};
+svc.importItems = function (f) {
+  if (!f || f.type !== 'items' || !Array.isArray(f.items)) throw new Error('This is not an item list file from the warehouse');
+  var a = 0, u = 0; f.items.forEach(function (x) { var r = svc.upsertItem(x); if (r.fresh) a++; else u++; });
+  PD.log('Item list imported', a + ' new, ' + u + ' updated'); PD.save(); return { added: a, updated: u };
+};
+svc.shelfList = function () { var m = {}; D().items.forEach(function (i) { if (i.rack) m[i.rack] = 1; }); return Object.keys(m).sort(); };
+svc.setShelf = function (itemId, shelf) { var it = svc.item(itemId); if (!it) throw new Error('Item not found'); it.rack = String(shelf || '').trim(); PD.log('Shelf set', it.name + ' → ' + (it.rack || 'none')); PD.save(); };
+
 /* ---------- requests (shop -> warehouse) ---------- */
 svc.newRequest = function (o) {
   var lines = (o.lines || []).filter(function (l) { return l.itemId && PD.num(l.qty) > 0; }).map(function (l) {
@@ -37,9 +66,8 @@ svc.importDispatch = function (f) {
   if (!f || f.type !== 'dispatch') throw new Error('This is not a dispatch file');
   if (D().dispatches.some(function (x) { return x.no === f.no; })) throw new Error('Dispatch ' + f.no + ' is already imported');
   var lines = (f.lines || []).map(function (l) {
-    var it = D().items.find(function (i) { return i.name.toLowerCase() === String(l.name || '').toLowerCase(); });
-    if (!it) throw new Error('Item "' + l.name + '" is not in your item list. Create it first (Create → Item).');
     if (!(PD.num(l.qty) > 0)) throw new Error('Bad quantity for ' + l.name);
+    var it = findItem(l.name); if (!it) it = svc.upsertItem(Object.assign({ mrp: l.mrp, tax: l.tax }, l)).item;
     return { itemId: it.id, reqIdx: l.reqIdx, batchNo: l.batchNo || 'NA', expiry: l.expiry || '', mrp: PD.num(l.mrp) || it.mrp, rate: PD.num(l.rate), qty: PD.num(l.qty), tax: l.tax != null ? PD.num(l.tax) : (it.tax || 0) };
   });
   if (!lines.length) throw new Error('The dispatch file has no items');
@@ -63,13 +91,21 @@ svc.receiveDispatch = function (id, recv, opts) {
   opts = opts || {};
   var d = D().dispatches.find(function (x) { return x.id === id; }); if (!d) throw new Error('Dispatch not found');
   if (d.status !== 'In transit') throw new Error('This dispatch is already ' + d.status.toLowerCase());
-  var lines = [], short = [];
+  var lines = [], short = [], shelves = opts.shelves || {};
   d.lines.forEach(function (l, i) {
     var q = recv && recv[i] != null ? PD.num(recv[i]) : l.qty; if (q < 0 || q > l.qty + 1e-9) throw new Error('Received quantity for ' + svc.itemName(l.itemId) + ' must be between 0 and ' + PD.qty(l.qty));
     if (q > 0) lines.push({ itemId: l.itemId, batchNo: l.batchNo, expiry: l.expiry, unit: 'sale', qty: q, free: 0, rate: l.rate, mrp: l.mrp, disc: 0, tax: l.tax });
     if (q < l.qty) short.push({ itemId: l.itemId, batchNo: l.batchNo, qty: PD.r2(l.qty - q) });
   });
   if (!lines.length) throw new Error('Nothing received.');
+  var place = {};
+  d.lines.forEach(function (l, i) {
+    var q = recv && recv[i] != null ? PD.num(recv[i]) : l.qty; if (!(q > 0)) return;
+    var it = svc.item(l.itemId), sh = String(shelves[i] != null ? shelves[i] : '').trim() || it.rack;
+    if (!sh) throw new Error('Assign a shelf for ' + it.name + ' before receiving (new medicine).');
+    place[l.itemId] = sh;
+  });
+  Object.keys(place).forEach(function (id) { svc.item(id).rack = place[id]; });
   var inv = svc.postPurchase({ supplierId: svc.warehouse().id, invNo: d.no, date: PD.today(), payMode: opts.payMode === 'cash' ? 'cash' : 'credit', lines: lines });
   d.status = short.length ? 'Received (short)' : 'Received'; d.invId = inv.id; d.receivedOn = PD.today(); d.receivedBy = PD.user ? PD.user.name : ''; d.short = short;
   var r = D().requests.find(function (x) { return x.id === d.requestId; }); if (r) r.status = short.length ? 'Received (short)' : 'Received';
@@ -82,6 +118,17 @@ svc.seedWarehouse = function () {
   svc.newRequest({ note: 'Weekly refill', lines: d.items.slice(0, 3).map(function (it) { return { itemId: it.id, qty: 2, unit: 'purchase' }; }) });
   var r2 = svc.newRequest({ note: 'Urgent - fast moving', lines: d.items.slice(3, 5).map(function (it) { return { itemId: it.id, qty: 1, unit: 'purchase' }; }) });
   svc.demoDispatch(r2.id);
+};
+
+/* demo: a dispatch that brings one brand-new medicine (needs a shelf) plus one already on the shelves */
+svc.seedNewMedDemo = function () {
+  var d = D(); if (d.newMedDemo || !d.demo || !d.items.length) return; d.newMedDemo = true;
+  var n = svc.upsertItem({ name: 'Vitamin D3 60K Cap', generic: 'Cholecalciferol 60000 IU', cat: 'Allopathy', schedule: 'OTC', tax: 12, mrp: 120, unit: 'Strip', punit: 'Box', conv: 4, mfr: 'Corvia Pharma', reorder: 8 }).item;
+  var old = d.items.find(function (i) { return i.rack && i.id !== n.id; }) || d.items[0];
+  var m = new Date(); m.setMonth(m.getMonth() + 20); var exp = m.getFullYear() + '-' + ('0' + (m.getMonth() + 1)).slice(-2);
+  var lines = [{ itemId: n.id, batchNo: 'VD3-26A', expiry: exp, mrp: 120, rate: 86.4, qty: 40, tax: 12 }, { itemId: old.id, batchNo: 'WH-RF1', expiry: exp, mrp: old.mrp, rate: PD.r2(old.mrp * 0.72), qty: (old.conv || 1) * 2, tax: old.tax || 0 }];
+  var dc = { id: PD.uid('dc'), no: svc.docNo('DC-', 'DC'), date: PD.today(), requestId: '', requestNo: '', lines: lines, status: 'In transit', by: 'Warehouse (demo)', note: 'Demo: one new medicine + one refill', external: true };
+  var v = svc.dispatchValue(dc); dc.taxable = v.taxable; dc.tax = v.tax; dc.total = v.total; d.dispatches.push(dc); PD.save();
 };
 
 /* ---------- attendance ---------- */
