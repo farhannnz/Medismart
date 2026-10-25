@@ -174,7 +174,7 @@ PD.views.billing = { render: function (host, arg) {
       var c = meta.customerId ? svc.customer(meta.customerId) : null;
       var go = function () {
         var bills = svc.postSale({ customerId: meta.customerId, doctor: meta.doctor, payMode: meta.payMode, received: meta.received === '' ? (meta.payMode === 'credit' ? 0 : totals.grand) : meta.received, discPct: meta.discPct, discAmt: meta.discAmt, lines: cart.map(function (l) { return { itemId: l.itemId, batchId: l.batchId, qty: l.qty, rate: l.rate, disc: l.disc }; }) });
-        PD.lastBills = bills; PD.toast('Saved ' + bills.map(function (b) { return b.no; }).join(' + ') + ' • ' + PD.money(bills.reduce(function (a, b) { return a + b.total; }, 0)), 'ok');
+        PD.lastBills = bills; if (PD.refreshAlerts) PD.refreshAlerts(); PD.toast('Saved ' + bills.map(function (b) { return b.no; }).join(' + ') + ' • ' + PD.money(bills.reduce(function (a, b) { return a + b.total; }, 0)), 'ok');
         if (print) bills.forEach(PD.printBill);
         PD.views.billing.render(host, null);
       };

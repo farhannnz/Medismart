@@ -14,7 +14,9 @@ svc.shiftFigures = function (sh) {
   Object.keys(f).forEach(function (k) { f[k] = PD.r2(f[k]); });
   f.expected = PD.r2(sh.openCash + f.cashSales - f.refunds + f.cin - f.cout - f.hand); return f;
 };
-svc.lastClosingCash = function (userId) { var l = D().shifts.filter(function (s) { return s.status === 'closed' && s.userId === userId; }); return l.length ? l[l.length - 1].closeCash : 0; };
+svc.lastClosingCash = function (userId) { var l = D().shifts.filter(function (s) { return s.status === 'closed'; }); return l.length ? l[l.length - 1].closeCash : 0; };
+/* the drawer carries on from where the last shift ended - nothing to type at the start */
+svc.drawerBalance = function () { var open = D().shifts.filter(function (s) { return s.status === 'open'; }); return open.length ? svc.shiftFigures(open[open.length - 1]).expected : svc.lastClosingCash(); };
 svc.shiftStart = function (user, openCash) {
   if (svc.shiftOpen(user.id)) throw new Error('A shift is already open for ' + user.name);
   openCash = PD.num(openCash); if (openCash < 0) throw new Error('Cash cannot be negative');
@@ -43,24 +45,22 @@ svc.cashMove = function (o) {
 };
 
 /* ---------- modals ---------- */
-PD.shiftStartModal = function (done) {
-  var u = PD.user, last = svc.lastClosingCash(u.id);
-  var isAdmin = u.role === 'Admin';
-  PD.modal({ title: 'Start your shift - ' + u.name, size: 'sm', sticky: true, body: '<p>Count the cash in the drawer now and enter it. This is saved against your login, so the closing cash can be checked.</p><div class="fld" style="margin-top:8px"><label>Cash in drawer right now (₹)</label><input class="in" id="oc" type="number" step="any" min="0" value="' + (last || '') + '" autofocus></div>' + (last ? '<p class="hint">Last time you closed with ₹' + PD.n2(last) + '.</p>' : '') + (isAdmin ? '<p class="hint">As admin you may skip if you are not handling the drawer today.</p>' : ''),
-    foot: (isAdmin ? [{ label: 'Skip', fn: function () { if (done) done(); } }] : []).concat([{ label: 'Start shift', cls: 'p', fn: function (api) { try { svc.shiftStart(u, PD.$('#oc', api.body).value === '' ? NaN : PD.$('#oc', api.body).value); PD.toast('Shift started', 'ok'); if (done) done(); if (PD.refreshAlerts) PD.refreshAlerts(); } catch (e) { PD.err(e); return false; } } }]) });
+PD.shiftAuto = function (user) {
+  user = user || PD.user; if (!user || svc.shiftOpen(user.id)) return null;
+  var sh = svc.shiftStart(user, svc.drawerBalance()); PD.toast('Shift started. Drawer opens with ₹' + PD.n2(sh.openCash) + ' (carried over automatically)', 'ok'); if (PD.refreshAlerts) PD.refreshAlerts(); return sh;
 };
 PD.shiftCloseModal = function (done, forLogout) {
   var sh = svc.shiftOpen(PD.user.id); if (!sh) { if (done) done(); return; }
   var f = svc.shiftFigures(sh);
-  var m = PD.modal({ title: 'Close your shift - ' + sh.name, size: 'md', sticky: true, body: '<table class="t" style="max-width:420px"><tbody><tr><td>Opening cash</td><td class="r">' + PD.n2(sh.openCash) + '</td></tr><tr><td>Cash sales (' + f.bills + ' bills)</td><td class="r">+ ' + PD.n2(f.cashSales) + '</td></tr><tr><td>Cash refunds (sales returns)</td><td class="r">- ' + PD.n2(f.refunds) + '</td></tr><tr><td>Cash in / out by admin</td><td class="r">+ ' + PD.n2(f.cin) + ' / - ' + PD.n2(f.cout + f.hand) + '</td></tr><tr><td><b>Cash that should be in the drawer</b></td><td class="r"><b>' + PD.n2(f.expected) + '</b></td></tr></tbody></table><div class="fld" style="margin-top:10px"><label>Cash you counted now (₹)</label><input class="in" id="cc" type="number" step="any" min="0" autofocus></div><div id="df" style="margin:6px 0;font-weight:700"></div><div class="fld"><label>Note (if there is a difference)</label><input class="in" id="cn"></div>',
-    foot: [{ label: 'Stay logged in' }, { label: forLogout ? 'Close shift & log out' : 'Close shift', cls: 'p', fn: function (api) { try { var v = PD.$('#cc', api.body).value; if (v === '') throw new Error('Enter the cash you counted'); var s2 = svc.shiftClose(sh, v, PD.$('#cn', api.body).value); if (s2.diff !== 0 && !PD.$('#cn', api.body).value.trim()) { /* allowed, but flagged */ } PD.toast('Shift closed' + (s2.diff ? ' - difference ' + PD.n2(s2.diff) : ' - cash matches'), s2.diff ? 'err' : 'ok'); if (done) done(); } catch (e) { PD.err(e); return false; } } }] });
+  var m = PD.modal({ title: 'Close your shift - ' + sh.name, size: 'md', sticky: true, body: '<table class="t" style="max-width:420px"><tbody><tr><td>Opening cash</td><td class="r">' + PD.n2(sh.openCash) + '</td></tr><tr><td>Cash sales (' + f.bills + ' bills)</td><td class="r">+ ' + PD.n2(f.cashSales) + '</td></tr><tr><td>Cash refunds (sales returns)</td><td class="r">- ' + PD.n2(f.refunds) + '</td></tr><tr><td>Cash in / out by admin</td><td class="r">+ ' + PD.n2(f.cin) + ' / - ' + PD.n2(f.cout + f.hand) + '</td></tr><tr><td><b>Cash that should be in the drawer</b></td><td class="r"><b>' + PD.n2(f.expected) + '</b></td></tr></tbody></table><div class="fld" style="margin-top:10px"><label>Cash in the drawer (₹) - calculated for you. If you counted and it is different, change it.</label><input class="in" id="cc" type="number" step="any" min="0" value="' + f.expected + '" autofocus></div><div id="df" style="margin:6px 0;font-weight:700"><span style="color:#2e8b57">Matches ✔</span></div><div class="fld"><label>Note (if there is a difference)</label><input class="in" id="cn"></div>',
+    foot: [{ label: 'Stay logged in' }, { label: forLogout ? 'Close shift & log out' : 'Close shift', cls: 'p', fn: function (api) { try { var v = PD.$('#cc', api.body).value; if (v === '') throw new Error('Enter the cash in the drawer'); var s2 = svc.shiftClose(sh, v, PD.$('#cn', api.body).value); if (s2.diff !== 0 && !PD.$('#cn', api.body).value.trim()) { /* allowed, but flagged */ } PD.toast('Shift closed' + (s2.diff ? ' - difference ' + PD.n2(s2.diff) : ' - cash matches'), s2.diff ? 'err' : 'ok'); if (done) done(); } catch (e) { PD.err(e); return false; } } }] });
   var cc = PD.$('#cc', m.el); cc.oninput = function () { var d = PD.num(cc.value) - f.expected; PD.$('#df', m.el).innerHTML = cc.value === '' ? '' : (Math.abs(d) < 0.005 ? '<span style="color:#2e8b57">Matches ✔</span>' : '<span style="color:#c62828">' + (d > 0 ? 'Excess ' : 'Short ') + PD.n2(Math.abs(d)) + '</span>'); };
 };
 PD.shiftEnsure = function () {
   var u = PD.user; if (!u) return;
   var sh = svc.shiftOpen(u.id);
   if (sh && sh.date !== PD.today()) { PD.toast('Your earlier shift of ' + PD.fmtDate(sh.date) + ' was left open. Please close it first.', 'err'); PD.shiftCloseModal(function () { PD.shiftEnsure(); }); return; }
-  if (!sh) PD.shiftStartModal();
+  if (!sh) PD.shiftAuto(u);
 };
 
 /* ---------- cash register screen ---------- */
@@ -71,10 +71,10 @@ PD.views.cashreg = { render: function (host, arg) {
     return '<div class="card" style="margin-bottom:8px"><div class="hd"><h3 style="padding:0;border:0">' + esc(title) + ' - ' + esc(sh.name) + ' (since ' + esc(sh.startAt) + ', ' + PD.fmtDate(sh.date) + ')</h3></div><div class="bd"><div class="grid g4"><div><div class="mut">Opening cash</div><b>' + PD.n2(sh.openCash) + '</b></div><div><div class="mut">Cash sales (' + f.bills + ')</div><b>' + PD.n2(f.cashSales) + '</b></div><div><div class="mut">Refunds</div><b>' + PD.n2(f.refunds) + '</b></div><div><div class="mut">Cash in / out</div><b>' + PD.n2(f.cin) + ' / ' + PD.n2(f.cout + f.hand) + '</b></div></div><div style="margin-top:8px;font-size:15px">Should be in drawer: <b>' + PD.n2(f.expected) + '</b></div></div></div>';
   }
   var open = d.shifts.filter(function (s) { return s.status === 'open' && (admin || s.userId === me.id); });
-  host.innerHTML = '<div class="msw whw"><div class="msband"><span class="mslogo">' + PD.icon('pill') + '</span><b>Cash Register &amp; Shifts</b></div><div style="padding:8px 12px">' +
-    (open.length ? open.map(function (s) { return card(s, s.userId === me.id ? 'Your open shift' : 'Open drawer'); }).join('') : '<div class="card" style="margin-bottom:8px"><div class="bd">No shift is open. ' + (me ? '<button class="btn p" id="st">Start my shift</button>' : '') + '</div></div>') +
+  host.innerHTML = '<div class="msw whw"><div class="msband"><span class="mslogo">' + PD.icon('pill') + '</span><b>Cash Register &amp; Shifts</b></div><div style="padding:8px 12px"><div class="drawerbig">Cash in drawer now (automatic): <b>₹' + PD.n2(svc.drawerBalance()) + '</b><small>opening + cash sales - refunds + cash in - cash out. Updates with every bill.</small></div>' +
+    (open.length ? open.map(function (s) { return card(s, s.userId === me.id ? 'Your open shift' : 'Open drawer'); }).join('') : '<div class="card" style="margin-bottom:8px"><div class="bd">No shift is open. ' + (me ? '<button class="btn p" id="st">Start my shift</button> <span class="hint">The drawer carries on automatically from the last shift.</span>' : '') + '</div></div>') +
     '<div class="row" style="margin-bottom:8px">' + (mine ? '<button class="btn p" id="cl">Close my shift</button>' : '') + (admin ? '<button class="btn" id="mv">Cash in / out / handover (admin)</button>' : '') + '</div><div id="sl"></div></div></div>';
-  var st = $('#st', host); if (st) st.onclick = function () { PD.shiftStartModal(function () { PD.views.cashreg.render(host); }); };
+  var st = $('#st', host); if (st) st.onclick = function () { PD.shiftAuto(); PD.views.cashreg.render(host); };
   var cl = $('#cl', host); if (cl) cl.onclick = function () { PD.shiftCloseModal(function () { PD.views.cashreg.render(host); }); };
   var mv = $('#mv', host); if (mv && arg && arg.mv) setTimeout(function () { mv.click(); }, 50); if (mv) mv.onclick = function () {
     if (!open.length) { PD.toast('No drawer is open. Start a shift first.', 'err'); return; }

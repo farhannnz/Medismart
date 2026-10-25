@@ -134,8 +134,11 @@ svc.seedNewMedDemo = function () {
 
 /* ---------- strip QR (printed by the warehouse): MS1|serial|name|batch|YYYY-MM|mrp|rate ---------- */
 svc.parseStrip = function (text) {
-  var p = String(text || '').trim().split('|'); if (p[0] !== 'MS1' || p.length < 5) return null;
-  return { serial: p[1], name: p[2], batchNo: p[3], expiry: p[4], mrp: PD.num(p[5]), rate: PD.num(p[6]) };
+  text = String(text || '').trim(); if (!text) return null;
+  var p = text.split('|'); if (p[0] === 'MS1' && p.length >= 5) return { serial: p[1], name: p[2], batchNo: p[3], expiry: p[4], mrp: PD.num(p[5]), rate: PD.num(p[6]) };
+  var m = /^L\d+-\d+$/i.exec(text); if (!m) return null; var serial = text.toUpperCase(), found = null;
+  D().dispatches.forEach(function (d) { d.lines.forEach(function (l) { if (!found && l.serials && l.serials.indexOf(serial) >= 0) { var it = svc.item(l.itemId); found = { serial: serial, name: it ? it.name : '', batchNo: l.batchNo, expiry: l.expiry, mrp: l.mrp, rate: l.rate, dispatchId: d.id }; } }); });
+  return found || { serial: serial, unknown: true };
 };
 svc.findBatchFor = function (st) {
   var it = D().items.find(function (i) { return i.name.toLowerCase() === String(st.name).toLowerCase(); }); if (!it) return null;

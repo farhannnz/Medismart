@@ -16,3 +16,6 @@
 @media (max-width:900px) { .whg { grid-template-columns:1fr; } }
 .shelf.need { border-color:#c62828 !important; background:#fff1f1 !important; } .mdi .t td small { font-size:10.5px; }
 .msgrid td.rx2, .pgrid td.rx2 { background:#fff0f0 !important; color:#c62828 !important; font-weight:700; } .msgrid td.rx { font-weight:700; }
+
+.drw { padding:0 8px; border:1px solid #2e8b57; background:#eaf3e2; color:#245c1c; font-weight:700; }
+.drawerbig { background:#eaf3e2; border:1px solid #2e8b57; padding:8px 12px; margin-bottom:8px; font-size:15px; } .drawerbig b { font-size:20px; color:#245c1c; } .drawerbig small { display:block; color:#555; font-size:11px; margin-top:2px; }

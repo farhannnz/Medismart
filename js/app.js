@@ -153,7 +153,7 @@ function shell() {
     '<div class="menubar" id="mbar"></div><div class="toolbar" id="tbar">' + tb + '<span class="sp"></span><div class="msearch">' + PD.icon('search') + '<input id="gsr" placeholder="Search (Ctrl+I)" readonly></div></div>' +
     '<div class="mdi-body"><div class="lstrip" id="lstrip"><button data-a="shelves">Shelves</button><button data-a="receive">Receive</button></div>' +
     '<div class="mdi-main"><div class="wtabs" id="wtabs"></div><main class="view" id="view"></main></div><div class="docks" id="docks"></div></div>' +
-    '<div class="statusbar" id="sbar"><span id="rc"></span><span class="sp"></span><span id="bell" class="bell" title="Alerts"></span><span class="usr">' + PD.icon('users') + esc(PD.user.name) + '</span><b class="plog">Medi<em>smart</em></b><span id="clk"></span></div></div>';
+    '<div class="statusbar" id="sbar"><span id="rc"></span><span class="sp"></span><span id="drw" class="drw" title="Cash in drawer (automatic)"></span><span id="bell" class="bell" title="Alerts"></span><span class="usr">' + PD.icon('users') + esc(PD.user.name) + '</span><b class="plog">Medi<em>smart</em></b><span id="clk"></span></div></div>';
   var yr = svc.currentYear();
   $('#dbt').textContent = 'DB:Account Accounting Year:' + PD.fmtDate(yr.start).replace(/-/g, '/') + ' - ' + PD.fmtDate(yr.end).replace(/-/g, '/');
   drawMenus(); drawDocks();
@@ -168,7 +168,7 @@ function landing(fresh) {
   wins = []; cur = 'home';
   if (fresh) { var a = PD.alerts().filter(function (x) { return x.lvl !== 'info'; }); if (a.length && PD.toast) PD.toast('🔔 ' + a.length + ' alert' + (a.length > 1 ? 's' : '') + ': ' + a[0].text + (a.length > 1 ? ' …see Messages panel' : ''), a[0].lvl === 'bad' ? 'err' : ''); }
 }
-PD.refreshAlerts = function () { var n = PD.alerts(), b = $('#bell'); if (b) { var hot = n.filter(function (x) { return x.lvl !== 'info'; }).length; b.textContent = '🔔 ' + n.length; b.className = 'bell' + (hot ? ' hot' : ''); } if (docks.msg) fillDock('msg', ''); };
+PD.refreshAlerts = function () { var dw = $('#drw'); if (dw && svc.drawerBalance) dw.textContent = 'Drawer ₹' + PD.n2(svc.drawerBalance()); var n = PD.alerts(), b = $('#bell'); if (b) { var hot = n.filter(function (x) { return x.lvl !== 'info'; }).length; b.textContent = '🔔 ' + n.length; b.className = 'bell' + (hot ? ' hot' : ''); } if (docks.msg) fillDock('msg', ''); };
 function tick() { var c = $('#clk'); if (c) { var d = new Date(); c.textContent = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US'); } }
 var ACTION_RX = /^(dock|toggle|nav|closecur|closeall|closeother|palette|about|home|logout|closeshift)/;
 function okItem(it) { if (it === '-' || it[0] === '%wins') return true; if (it[4] === 'direct' && !PD.DB.settings.allowDirect) return false; if (ACTION_RX.test(it[1])) return true; return can(it[1]); }

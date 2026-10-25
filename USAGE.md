@@ -15,7 +15,7 @@ Maal **sirf warehouse se**. Shop item/supplier nahi banata. Warehouse alag softw
 File • Sale • Stock • Warehouse • Cash • Accounts • Tools • View • Window • Help
 
 ## Roz ka kaam
-- **Login → Shift:** drawer ka cash ginke daalo ("Start your shift"). Logout par ginke daalo; software batata hai kitna hona chahiye aur difference.
+- **Login → Shift:** apne aap shuru. Drawer ka cash **automatic** (pichli shift ka cash + cash sales - refunds + cash in - out); status bar me "Drawer ₹...". Logout par calculated cash dikhta hai, alag ho to badlo.
 - **Bill:** Sale → Sales Bill (F2). Schedule H = laal Rx, H1/X = doctor zaroori. Expiry wala batch peela/laal. Cash bill shift me judta hai.
 - **Maal kam:** Warehouse → Stock Request (F3) → Auto Fill → Send. Request List → request → Export request file.
 - **Maal aaya:** Warehouse → Receive Stock (F4) → Import dispatch file → strips scan karke ginti → shelf → Receive.
@@ -28,7 +28,7 @@ File • Sale • Stock • Warehouse • Cash • Accounts • Tools • View �
 - **Alerts:** Messages panel + 🔔.
 
 ## Files
-Strip QR (warehouse chhapta hai): `MS1|serial|name|batch|YYYY-MM|mrp|rate`. Quantities sale unit (strip) me.
+Har strip par warehouse ka **barcode label** (Code 128, strip ka code jaise `L12-045`). Shop me scan karne par code dispatch file se pehchana jaata hai. Quantities sale unit (strip) me.
 - **Request** (shop→warehouse): `{ "type":"request", "shop":"<shop>", "no":"RQ-000001", "date":"YYYY-MM-DD", "note":"", "lines":[{ "name":"<item>", "qty":2, "unit":"purchase|sale" }] }`
 - **Dispatch** (warehouse→shop): `{ "type":"dispatch", "v":2, "warehouse":"", "no":"WD-000001", "date":"", "requestNo":"RQ-000001", "by":"", "note":"", "lines":[{ "name":"", "generic":"", "cat":"", "schedule":"", "mfr":"", "unit":"Strip", "punit":"Box", "conv":10, "hsn":"", "tax":12, "batchNo":"", "expiry":"YYYY-MM", "mrp":0, "rate":0, "qty":0, "serials":["L12-001"] }] }` (naya item apne aap bann jaata hai)
 - **Return** (shop→warehouse): `{ "type":"return", "v":2, "shop":"", "no":"WR-000001", "date":"", "note":"", "lines":[{ "name":"", "batchNo":"", "expiry":"", "mrp":0, "rate":0, "qty":0, "reason":"Expired", "note":"", "serials":["L12-001"] }] }`
