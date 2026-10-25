@@ -27,7 +27,7 @@ PD.views.billing = { render: function (host, arg) {
   PD.hotkeys = {};
   var D = PD.DB, S = D.settings, cart = [], meta = { customerId: '', doctor: '', payMode: 'cash', received: '', discPct: '', discAmt: '', remarks: '' }, sel = -1, idx = 0, results = [], browse = -1;
   if (arg && arg.recalled) { cart = arg.recalled.cart; meta = Object.assign(meta, arg.recalled.meta); }
-  host.innerHTML = '<div class="msw"><div class="msband"><span class="mslogo">' + PD.icon('pill') + '</span><b>PharmaDesk</b></div>' +
+  host.innerHTML = '<div class="msw"><div class="msband"><span class="mslogo">' + PD.icon('pill') + '</span><b>Medismart</b></div>' +
     '<div class="mshead"><div class="msbadge"><span class="rx">Rx</span><div><b>Sale</b><br><small>Billing</small></div></div>' +
     '<div class="msfld"><label>Date :</label><input class="in" id="bdate" value="' + PD.fmtDate(PD.today()) + '" readonly style="width:110px"><label style="margin-left:14px">Invoice No :</label><span class="g">A</span><input class="in" id="bno" readonly value="" style="width:80px;font-weight:700"></div>' +
     '<div class="msfld wide"><label>Patient\'s Name :</label><input class="in" id="cus" placeholder="Walk-in (type to search)" autocomplete="off"><button class="btn sm" id="ncus" title="New customer">+</button> <span class="hint" id="cinfo"></span></div>' +

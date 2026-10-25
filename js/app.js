@@ -1,4 +1,4 @@
-/* PharmaDesk shell: boot, login, navigation, shortcuts, command palette */
+/* Medismart shell: boot, login, navigation, shortcuts, command palette */
 (function () {
 'use strict';
 var PD = window.PD, esc = PD.esc, svc = PD.svc, $ = PD.$, $$ = PD.$$;
@@ -33,7 +33,7 @@ function boot() {
     PD.applyTheme();
     var uid = sessionStorage.getItem('pd_user');
     PD.user = uid ? PD.DB.users.find(function (u) { return u.id === uid && u.active !== false; }) : null;
-    if (PD.user) { shell(); landing(false); } else loginScreen();
+    if (PD.user) { shell(); landing(false); setTimeout(PD.shiftEnsure, 250); } else loginScreen();
   });
 }
 function migrate() {
@@ -49,23 +49,23 @@ function migrate() {
 /* ---------- login ---------- */
 function loginScreen() {
   var demo = PD.DB.demo && PD.DB.users.length === 1 && PD.DB.users[0].pass === PD.hash('admin');
-  document.body.innerHTML = '<div class="login"><div class="card box"><div class="brand" style="padding:0;color:var(--ink)"><span class="lg">' + PD.icon('pill') + '</span><b>PharmaDesk</b></div><h1>Welcome back</h1><p class="mut">Sign in to your pharmacy workspace.</p><br>' +
+  document.body.innerHTML = '<div class="login"><div class="card box"><div class="brand" style="padding:0;color:var(--ink)"><span class="lg">' + PD.icon('pill') + '</span><b>Medismart</b></div><h1>Welcome back</h1><p class="mut">Sign in to your pharmacy workspace.</p><br>' +
     '<div class="fld"><label>Username</label><input class="in" id="lu" autocomplete="username" autofocus></div><div class="fld" style="margin-top:12px"><label>Password</label><input class="in" id="lp" type="password" autocomplete="current-password"></div>' +
     '<p id="le" style="color:var(--bad);min-height:20px;margin:8px 0 0"></p><button class="btn p lg" id="lb" style="width:100%;margin-top:6px">Sign in</button>' +
     (demo ? '<p class="hint" style="margin-top:14px">Demo data is loaded. Sign in with <b>admin</b> / <b>admin</b>, then change the password in Settings.</p>' : '') + '</div></div>';
   function go() {
     var u = PD.DB.users.find(function (x) { return x.username.toLowerCase() === $('#lu').value.trim().toLowerCase() && x.active !== false; });
     if (!u || u.pass !== PD.hash($('#lp').value)) { $('#le').textContent = 'Wrong username or password.'; return; }
-    PD.user = u; sessionStorage.setItem('pd_user', u.id); PD.log('Signed in'); if (PD.DB.settings.autoPunch) svc.punchIn(u); PD.save(); shell(); landing(true);
+    PD.user = u; sessionStorage.setItem('pd_user', u.id); PD.log('Signed in'); if (PD.DB.settings.autoPunch) svc.punchIn(u); PD.save(); shell(); landing(true); setTimeout(PD.shiftEnsure, 250);
   }
   $('#lb').onclick = go; $('#lp').addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); }); $('#lu').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#lp').focus(); });
 }
-PD.logout = function () { if (PD.user && PD.DB.settings.autoPunch) svc.punchOut(PD.user); PD.log('Signed out'); PD.save(); sessionStorage.removeItem('pd_user'); PD.user = null; loginScreen(); };
+PD.logout = function (forced) { if (!forced && PD.user && svc.shiftOpen(PD.user.id)) { PD.shiftCloseModal(function () { PD.logout(true); }, true); return; } if (PD.user && PD.DB.settings.autoPunch) svc.punchOut(PD.user); PD.log('Signed out'); PD.save(); sessionStorage.removeItem('pd_user'); PD.user = null; loginScreen(); };
 
 /* ---------- shell: classic MDI desktop (menu bar, toolbar, window tabs, docked lists, status bar) ---------- */
 var MENUS = [
   ['File', [
-    ['New Sale Bill', 'billing', { fresh: 1 }, 'F2'], ['Attendance (Punch In / Out)', 'attendance'], '-',
+    ['New Sale Bill', 'billing', { fresh: 1 }, 'F2'], ['Attendance (Punch In / Out)', 'attendance'], ['Cash Register && Shifts', 'cashreg'], '-',
     ['Backup && Restore', 'settings', { tab: 'data' }], ['Activity Log', 'settings', { tab: 'log' }], '-',
     ['Change User', 'logout'], ['Exit', 'logout']]],
   ['Sale', [
@@ -74,13 +74,15 @@ var MENUS = [
     ['Doctor wise Sales', 'reports', { report: 'sales-doc' }], ['Schedule H/H1/X Register', 'reports', { report: 'sched-reg' }]]],
   ['Stock', [
     ['Current Stock', 'stock', { tab: 'list' }, 'F5'], ['Shelves', 'shelves'], ['Stock Statement', 'stock', { tab: 'flow' }], '-',
-    ['Expiry Watch', 'expiry', { tab: 'watch' }], ['Return Expired Stock to Warehouse', 'expclaim'], '-',
+    ['Expiry Watch', 'expiry', { tab: 'watch' }], ['Return Stock to Warehouse (scan)', 'whreturn'], '-',
     ['Reorder List', 'reports', { report: 'reorder' }], ['Fast && Slow Moving', 'reports', { report: 'moving' }]]],
   ['Warehouse', [
     ['Stock Request', 'request', null, 'F3'], ['Auto Fill Request (low stock)', 'request', { auto: 1 }], ['Request List', 'reqlist'], '-',
-    ['Receive Stock', 'receive', null, 'F4'], ['Import Item List from Warehouse', 'itemsimport'], '-',
-    ['Return Stock to Warehouse', 'purchase', { tab: 'ret' }], ['Warehouse Account (what we owe)', 'accounts', { tab: 'ledger', acc: 'sup_wh' }],
+    ['Receive Stock (scan)', 'receive', null, 'F4'], ['Import Item List from Warehouse', 'itemsimport'], '-',
+    ['Return Stock to Warehouse (scan)', 'whreturn'], ['Warehouse Account (what we owe)', 'accounts', { tab: 'ledger', acc: 'sup_wh' }],
     ['Purchase Report', 'reports', { report: 'pur-reg' }]]],
+  ['Cash', [
+    ['Cash Register && Shifts', 'cashreg'], ['Cash In / Out / Handover (admin)', 'cashreg', { mv: 1 }], ['Close My Shift', 'closeshift']]],
   ['Accounts', [
     ['Day Book', 'accounts', { tab: 'daybook' }], ['Ledger', 'accounts', { tab: 'ledger' }, 'F8'], ['Profit && Loss / Balance Sheet', 'accounts', { tab: 'pnl' }], ['Receivables && Payables', 'accounts', { tab: 'dues' }], '-',
     ['Customer Outstanding', 'reports', { report: 'recv' }], ['New Accounting Year', 'accounts', { tab: 'year' }]]],
@@ -95,12 +97,12 @@ var MENUS = [
 var TOOLS = [
   ['Save', 'check', 'save', '#2f6fb3'], ['Clear', 'x', 'clear', '#e0a100'], ['Close window', 'x', 'closecur', '#c62828'], ['Log out', 'lock', 'logout', '#7a8a2e'], '|',
   ['Sales bill (F2)', 'bill', 'billing', '#2e8b57'], ['Sales return', 'ret', 'salesret', '#c77d00'], ['Customer history', 'users', 'custhist', '#7b5ea7'], '|',
-  ['Stock request (F3)', 'order', 'request', '#1e88a8'], ['Receive stock (F4)', 'cart', 'receive', '#7b5ea7'], ['Stock (F5)', 'box', 'stock', '#8a5a2b'], ['Shelves', 'box', 'shelves', '#2e8b57'], ['Expiry watch', 'clock', 'expiry:watch', '#d9534f'], '|',
+  ['Stock request (F3)', 'order', 'request', '#1e88a8'], ['Receive stock (F4)', 'cart', 'receive', '#7b5ea7'], ['Return to warehouse', 'ret', 'whreturn', '#c62828'], ['Stock (F5)', 'box', 'stock', '#8a5a2b'], ['Shelves', 'box', 'shelves', '#2e8b57'], ['Expiry watch', 'clock', 'expiry:watch', '#d9534f'], '|',
   ['Reports (F7)', 'report', 'reports', '#1e88a8'], ['Day book', 'book', 'accounts:daybook', '#8a5a2b'], ['Ledger (F8)', 'book', 'accounts:ledger', '#2f6fb3'], '|',
-  ['Attendance', 'users', 'attendance', '#2e8b57'], ['Settings', 'gear', 'settings', '#666']
+  ['Cash register', 'book', 'cashreg', '#c77d00'], ['Attendance', 'users', 'attendance', '#2e8b57'], ['Settings', 'gear', 'settings', '#666']
 ];
-var TITLES = {}; NAV.forEach(function (g) { g[1].forEach(function (i) { TITLES[i[0]] = i[1]; }); }); TITLES.home = 'PharmaDesk'; TITLES.shelves = 'Shelves'; TITLES.itemsimport = 'Import Item List'; TITLES.dnote = 'Delivery Note'; TITLES.batchedit = 'Batch Edit'; TITLES.expclaim = 'ExpiryClaim'; TITLES.itemdlg = 'Item'; TITLES.acctdlg = 'Account Details'; TITLES.request = 'Stock Request'; TITLES.reqlist = 'Request List'; TITLES.receive = 'Receive Stock'; TITLES.attendance = 'Attendance'; TITLES.custhist = 'Customer History';
-var RIGHT = { dnote: 'orders', batchedit: 'stock', expclaim: 'expiry', itemdlg: 'masters', acctdlg: 'accounts', shelves: 'stock', itemsimport: 'requests', request: 'requests', reqlist: 'requests', receive: 'requests', custhist: 'billing' };
+var TITLES = {}; NAV.forEach(function (g) { g[1].forEach(function (i) { TITLES[i[0]] = i[1]; }); }); TITLES.home = 'Medismart'; TITLES.shelves = 'Shelves'; TITLES.whreturn = 'Return to Warehouse'; TITLES.cashreg = 'Cash Register'; TITLES.itemsimport = 'Import Item List'; TITLES.dnote = 'Delivery Note'; TITLES.batchedit = 'Batch Edit'; TITLES.expclaim = 'ExpiryClaim'; TITLES.itemdlg = 'Item'; TITLES.acctdlg = 'Account Details'; TITLES.request = 'Stock Request'; TITLES.reqlist = 'Request List'; TITLES.receive = 'Receive Stock'; TITLES.attendance = 'Attendance'; TITLES.custhist = 'Customer History';
+var RIGHT = { dnote: 'orders', batchedit: 'stock', expclaim: 'expiry', itemdlg: 'masters', acctdlg: 'accounts', shelves: 'stock', itemsimport: 'requests', whreturn: 'requests', cashreg: 'attendance', request: 'requests', reqlist: 'requests', receive: 'requests', custhist: 'billing' };
 var wins = [], cur = 'home', docks = { items: true, mfrs: false, sups: false, msg: true }, ui = { toolbar: true, status: true };
 PD.go = function (route, arg) { openWin(route, arg); };
 
@@ -129,10 +131,11 @@ function act(a) {
   if (!a) return;
   var m;
   if (a === 'palette') return palette();
+  if (a === 'closeshift') return PD.shiftCloseModal(function () { PD.logout(true); }, true);
   if (a === 'closecur') return cur === 'home' ? 0 : closeWin(cur);
   if (a === 'closeall') { wins = []; cur = 'home'; return renderWin(); }
   if (a === 'closeother') { wins = wins.filter(function (w) { return w.key === cur; }); return renderWin(); }
-  if (a === 'about') return PD.modal({ title: 'About PharmaDesk', size: 'sm', body: '<p><b>PharmaDesk</b> - pharmacy billing, stock keeping &amp; accounting.</p><p class="mut">Data is stored in this browser. Use File → Backup &amp; Restore regularly.</p>', foot: [{ label: 'OK', cls: 'p' }] });
+  if (a === 'about') return PD.modal({ title: 'About Medismart', size: 'sm', body: '<p><b>Medismart</b> - pharmacy billing, stock keeping &amp; accounting.</p><p class="mut">Data is stored in this browser. Use File → Backup &amp; Restore regularly.</p>', foot: [{ label: 'OK', cls: 'p' }] });
   if (a === 'save') { var b = $('#view .btn.p:not(:disabled)'); return b && b.click(); }
   if (a === 'clear') { var w = wins.find(function (x) { return x.key === cur; }); if (w) { w.arg = { fresh: 1, tab: w.arg && w.arg.tab }; renderWin(); } return; }
   if ((m = /^nav:(-?1)$/.exec(a))) { var ks = ['home'].concat(wins.map(function (w) { return w.key; })), i = ks.indexOf(cur); cur = ks[(i + (+m[1]) + ks.length) % ks.length]; return renderWin(); }
@@ -150,7 +153,7 @@ function shell() {
     '<div class="menubar" id="mbar"></div><div class="toolbar" id="tbar">' + tb + '<span class="sp"></span><div class="msearch">' + PD.icon('search') + '<input id="gsr" placeholder="Search (Ctrl+I)" readonly></div></div>' +
     '<div class="mdi-body"><div class="lstrip" id="lstrip"><button data-a="shelves">Shelves</button><button data-a="receive">Receive</button></div>' +
     '<div class="mdi-main"><div class="wtabs" id="wtabs"></div><main class="view" id="view"></main></div><div class="docks" id="docks"></div></div>' +
-    '<div class="statusbar" id="sbar"><span id="rc"></span><span class="sp"></span><span id="bell" class="bell" title="Alerts"></span><span class="usr">' + PD.icon('users') + esc(PD.user.name) + '</span><b class="plog">Pharma<em>Desk</em></b><span id="clk"></span></div></div>';
+    '<div class="statusbar" id="sbar"><span id="rc"></span><span class="sp"></span><span id="bell" class="bell" title="Alerts"></span><span class="usr">' + PD.icon('users') + esc(PD.user.name) + '</span><b class="plog">Medi<em>smart</em></b><span id="clk"></span></div></div>';
   var yr = svc.currentYear();
   $('#dbt').textContent = 'DB:Account Accounting Year:' + PD.fmtDate(yr.start).replace(/-/g, '/') + ' - ' + PD.fmtDate(yr.end).replace(/-/g, '/');
   drawMenus(); drawDocks();
@@ -167,7 +170,7 @@ function landing(fresh) {
 }
 PD.refreshAlerts = function () { var n = PD.alerts(), b = $('#bell'); if (b) { var hot = n.filter(function (x) { return x.lvl !== 'info'; }).length; b.textContent = '🔔 ' + n.length; b.className = 'bell' + (hot ? ' hot' : ''); } if (docks.msg) fillDock('msg', ''); };
 function tick() { var c = $('#clk'); if (c) { var d = new Date(); c.textContent = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US'); } }
-var ACTION_RX = /^(dock|toggle|nav|closecur|closeall|closeother|palette|about|home|logout)/;
+var ACTION_RX = /^(dock|toggle|nav|closecur|closeall|closeother|palette|about|home|logout|closeshift)/;
 function okItem(it) { if (it === '-' || it[0] === '%wins') return true; if (it[4] === 'direct' && !PD.DB.settings.allowDirect) return false; if (ACTION_RX.test(it[1])) return true; return can(it[1]); }
 function menuItems(i) { var a = MENUS[i][1].map(function (it, n) { return { it: it, n: n }; }).filter(function (x) { return okItem(x.it); }), out = []; a.forEach(function (x) { if (x.it === '-' && (!out.length || out[out.length - 1].it === '-')) return; out.push(x); }); while (out.length && out[out.length - 1].it === '-') out.pop(); return out; }
 function drawMenus() {
@@ -226,7 +229,7 @@ function renderWin() {
   var w = wins.find(function (x) { return x.key === cur; });
   $$('#lstrip button').forEach(function (b) { b.classList.remove('on'); });
   if (!w) {
-    host.innerHTML = '<div class="homebg"><div class="wm"><div class="wm1">' + PD.icon('pill') + 'Pharma<em>Desk</em></div><div class="wm2">' + esc(PD.DB.shop.name) + '</div><div class="wm3">pharmacy billing • stock keeping • accounting</div></div></div>';
+    host.innerHTML = '<div class="homebg"><div class="wm"><div class="wm1">' + PD.icon('pill') + 'Medi<em>smart</em></div><div class="wm2">' + esc(PD.DB.shop.name) + '</div><div class="wm3">pharmacy billing • stock keeping • accounting</div></div></div>';
     var rc = $('#rc'); if (rc) rc.textContent = ''; return;
   }
   host.innerHTML = '';

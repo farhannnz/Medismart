@@ -68,7 +68,7 @@ svc.importDispatch = function (f) {
   var lines = (f.lines || []).map(function (l) {
     if (!(PD.num(l.qty) > 0)) throw new Error('Bad quantity for ' + l.name);
     var it = findItem(l.name); if (!it) it = svc.upsertItem(Object.assign({ mrp: l.mrp, tax: l.tax }, l)).item;
-    return { itemId: it.id, reqIdx: l.reqIdx, batchNo: l.batchNo || 'NA', expiry: l.expiry || '', mrp: PD.num(l.mrp) || it.mrp, rate: PD.num(l.rate), qty: PD.num(l.qty), tax: l.tax != null ? PD.num(l.tax) : (it.tax || 0) };
+    return { itemId: it.id, reqIdx: l.reqIdx, batchNo: l.batchNo || 'NA', expiry: l.expiry || '', mrp: PD.num(l.mrp) || it.mrp, rate: PD.num(l.rate), qty: PD.num(l.qty), tax: l.tax != null ? PD.num(l.tax) : (it.tax || 0), serials: Array.isArray(l.serials) ? l.serials : [] };
   });
   if (!lines.length) throw new Error('The dispatch file has no items');
   var r = D().requests.find(function (x) { return x.no === f.requestNo; });
@@ -129,6 +129,32 @@ svc.seedNewMedDemo = function () {
   var lines = [{ itemId: n.id, batchNo: 'VD3-26A', expiry: exp, mrp: 120, rate: 86.4, qty: 40, tax: 12 }, { itemId: old.id, batchNo: 'WH-RF1', expiry: exp, mrp: old.mrp, rate: PD.r2(old.mrp * 0.72), qty: (old.conv || 1) * 2, tax: old.tax || 0 }];
   var dc = { id: PD.uid('dc'), no: svc.docNo('DC-', 'DC'), date: PD.today(), requestId: '', requestNo: '', lines: lines, status: 'In transit', by: 'Warehouse (demo)', note: 'Demo: one new medicine + one refill', external: true };
   var v = svc.dispatchValue(dc); dc.taxable = v.taxable; dc.tax = v.tax; dc.total = v.total; d.dispatches.push(dc); PD.save();
+};
+
+
+/* ---------- strip QR (printed by the warehouse): MS1|serial|name|batch|YYYY-MM|mrp|rate ---------- */
+svc.parseStrip = function (text) {
+  var p = String(text || '').trim().split('|'); if (p[0] !== 'MS1' || p.length < 5) return null;
+  return { serial: p[1], name: p[2], batchNo: p[3], expiry: p[4], mrp: PD.num(p[5]), rate: PD.num(p[6]) };
+};
+svc.findBatchFor = function (st) {
+  var it = D().items.find(function (i) { return i.name.toLowerCase() === String(st.name).toLowerCase(); }); if (!it) return null;
+  return D().batches.find(function (b) { return b.itemId === it.id && b.batchNo === st.batchNo && (!st.expiry || b.expiry === st.expiry); }) || null;
+};
+/* ---------- returning stock to the warehouse (scan + reason per row) ---------- */
+svc.sendReturn = function (o) {
+  var lines = (o.lines || []).filter(function (l) { return PD.num(l.qty) > 0; });
+  if (!lines.length) throw new Error('Scan or add at least one strip to return');
+  lines.forEach(function (l) { var b = svc.batch(l.batchId); if (!b) throw new Error('A batch is missing'); if (!l.reason) throw new Error('Choose a reason for ' + svc.itemName(b.itemId)); if (PD.num(l.qty) > b.qty + 1e-9) throw new Error('Only ' + PD.qty(b.qty) + ' of ' + svc.itemName(b.itemId) + ' (batch ' + b.batchNo + ') is in your shop'); });
+  var out = lines.map(function (l) { var b = svc.batch(l.batchId), it = svc.item(b.itemId); return { itemId: it.id, name: it.name, batchNo: b.batchNo, expiry: b.expiry, mrp: b.mrp, rate: b.rate, qty: PD.num(l.qty), reason: l.reason, note: l.note || '', serials: l.serials || [] }; });
+  var pr = svc.postPurchaseReturn({ supplierId: svc.warehouse().id, lines: lines.map(function (l) { return { batchId: l.batchId, qty: PD.num(l.qty) }; }), reason: 'Returned to warehouse' });
+  var rec = { id: PD.uid('wr'), no: svc.docNo('WR-', 'WRET'), date: PD.today(), time: PD.nowTime(), by: PD.user ? PD.user.name : '', note: o.note || '', lines: out, status: 'Sent', value: pr.total, prId: pr.id };
+  D().wreturns.push(rec);
+  out.forEach(function (l) { (l.serials || []).forEach(function (s) { D().returnedSerials[s] = rec.no; }); });
+  PD.log('Return to warehouse ' + rec.no, out.length + ' lines ' + PD.n2(pr.total)); PD.save(); return rec;
+};
+svc.returnFile = function (r) {
+  return { type: 'return', v: 2, shop: D().shop.name, no: r.no, date: r.date, note: r.note, lines: r.lines.map(function (l) { return { name: l.name, batchNo: l.batchNo, expiry: l.expiry, mrp: l.mrp, rate: l.rate, qty: l.qty, reason: l.reason, note: l.note, serials: l.serials }; }) };
 };
 
 /* ---------- attendance ---------- */

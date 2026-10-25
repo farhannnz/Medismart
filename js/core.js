@@ -1,4 +1,4 @@
-/* PharmaDesk core: data store, persistence, stock + accounting engine */
+/* Medismart core: data store, persistence, stock + accounting engine */
 (function () {
 'use strict';
 var PD = window.PD = window.PD || {};
@@ -74,7 +74,7 @@ PD.blank = function () {
       scheduleColors: true, colsPref: {}, printWidth: '80mm', allowDirect: false, autoPunch: true, whName: 'Main Warehouse', shiftStart: '09:00', graceMin: 15
     },
     items: [], mfrs: [], suppliers: [], customers: [], doctors: [], batches: [], moves: [], purchases: [], preturns: [], pos: [], dnotes: [],
-    sales: [], sreturns: [], holds: [], damage: [], whBatches: [], requests: [], dispatches: [], attendance: [], offers: [], openings: [], accounts: [
+    sales: [], sreturns: [], holds: [], damage: [], whBatches: [], requests: [], dispatches: [], attendance: [], wreturns: [], shifts: [], cashmoves: [], returnedSerials: {}, offers: [], openings: [], accounts: [
       { id: 'cash', name: 'Cash in Hand', group: 'Cash', nat: 'A', sys: 1 }, { id: 'bank', name: 'Bank / UPI / Card', group: 'Bank', nat: 'A', sys: 1 },
       { id: 'sales', name: 'Sales', group: 'Sales', nat: 'I', sys: 1 }, { id: 'purchase', name: 'Purchase', group: 'Purchase', nat: 'E', sys: 1 },
       { id: 'salesret', name: 'Sales Return', group: 'Sales', nat: 'E', sys: 1 }, { id: 'purret', name: 'Purchase Return', group: 'Purchase', nat: 'I', sys: 1 },
@@ -347,7 +347,7 @@ svc.postSaleReturn = function (r) {
   var v = svc.voucher(date, 'Sales Return', 'Sales return ' + no + ' against ' + bill.no, [
     { acc: 'salesret', dr: taxable }, { acc: 'outtax', dr: tax }, toCustomer ? { acc: svc.partyAcc('cus', bill.customerId), cr: total } : { acc: bill.payMode === 'cash' || bill.payMode === 'credit' ? 'cash' : 'bank', cr: total }
   ], { kind: 'sreturn', id: id });
-  var rec = { id: id, no: no, date: date, billId: bill.id, billNo: bill.no, customerId: bill.customerId, lines: lines, taxable: taxable, tax: tax, total: total, voucherId: v.id, reason: r.reason || '' };
+  var rec = { id: id, no: no, date: date, time: PD.nowTime(), user: PD.user ? PD.user.username : '', cash: !toCustomer && (bill.payMode === 'cash' || bill.payMode === 'credit'), billId: bill.id, billNo: bill.no, customerId: bill.customerId, lines: lines, taxable: taxable, tax: tax, total: total, voucherId: v.id, reason: r.reason || '' };
   D().sreturns.push(rec); PD.log('Sales return ' + no, bill.no); PD.save();
   return rec;
 };

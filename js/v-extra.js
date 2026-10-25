@@ -9,9 +9,9 @@ PD.alerts = function () {
   var exp = 0, expV = 0, soon = 0, soonV = 0;
   D.batches.forEach(function (b) { if (!(b.qty > 0) || !b.expiry) return; var d = PD.daysToExp(b.expiry); if (d < 0) { exp++; expV += b.qty * b.rate; } else if (d <= days) { soon++; soonV += b.qty * b.rate; } });
   if (can('expiry')) {
-    if (exp) out.push({ lvl: 'bad', text: exp + ' batch' + (exp > 1 ? 'es are' : ' is') + ' EXPIRED and still in stock (₹' + PD.n2(expV) + ')', go: ['expiry', { tab: 'watch' }], icon: 'alert' });
-    if (soon) out.push({ lvl: 'warn', text: soon + ' batch' + (soon > 1 ? 'es' : '') + ' expire within ' + days + ' days (₹' + PD.n2(soonV) + ')', go: ['expclaim'], icon: 'clock' });
-    var pend = D.damage.filter(function (d) { return d.status === 'Pending'; }).length; if (pend) out.push({ lvl: 'info', text: pend + ' expired/damaged item(s) not yet claimed from the warehouse', go: ['expclaim', { tab: 'uncl' }], icon: 'order' });
+    if (exp) out.push({ lvl: 'bad', text: exp + ' batch' + (exp > 1 ? 'es are' : ' is') + ' EXPIRED and still in stock (₹' + PD.n2(expV) + ')', go: ['whreturn'], icon: 'alert' });
+    if (soon) out.push({ lvl: 'warn', text: soon + ' batch' + (soon > 1 ? 'es' : '') + ' expire within ' + days + ' days (₹' + PD.n2(soonV) + ')', go: ['expiry', { tab: 'watch' }], icon: 'clock' });
+    var pend = D.damage.filter(function (d) { return d.status === 'Pending'; }).length; if (pend) out.push({ lvl: 'info', text: pend + ' expired/damaged item(s) sitting in the old claim list', go: ['expiry', { tab: 'claims' }], icon: 'order' });
   }
   if (can('stock') || can('requests')) {
     var st = svc.stockMap(), low = D.items.filter(function (i) { return i.active !== false && i.reorder > 0 && (st[i.id] || 0) <= i.reorder; });
@@ -27,6 +27,10 @@ PD.alerts = function () {
     var rec = 0; D.customers.forEach(function (c) { var b = svc.partyBalance('cus', c.id); if (b > 0) rec += b; });
     if (rec > 0) out.push({ lvl: 'info', text: 'Customers owe ₹' + PD.n2(rec) + ' (credit sales)', go: ['reports', { report: 'recv' }], icon: 'report' });
     var pay = svc.partyBalance('sup', 'wh'); if (pay > 0) out.push({ lvl: 'info', text: 'Payable to warehouse: ₹' + PD.n2(pay), go: ['accounts', { tab: 'ledger', acc: 'sup_wh' }], icon: 'book' });
+  }
+  if (PD.user && PD.user.role === 'Admin') {
+    var old = D.shifts.filter(function (s) { return s.status === 'open' && s.date < PD.today(); }); if (old.length) out.push({ lvl: 'warn', text: old.length + ' shift(s) from earlier days were never closed (' + old.map(function (s) { return s.name; }).join(', ') + ')', go: ['cashreg'], icon: 'alert' });
+    var df = D.shifts.filter(function (s) { return s.status === 'closed' && s.date === PD.today() && s.diff !== 0; }); if (df.length) out.push({ lvl: 'bad', text: 'Cash difference today: ' + df.map(function (s) { return s.name + ' ' + (s.diff > 0 ? '+' : '') + PD.n2(s.diff); }).join(', '), go: ['cashreg'], icon: 'alert' });
   }
   if (PD.user && !svc.attOf(PD.user.id, PD.today())) out.push({ lvl: 'warn', text: 'You have not marked attendance today', go: ['attendance'], icon: 'users' });
   return out;

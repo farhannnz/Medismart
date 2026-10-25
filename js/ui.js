@@ -1,4 +1,4 @@
-/* PharmaDesk UI helpers */
+/* Medismart UI helpers */
 (function () {
 'use strict';
 var PD = window.PD, esc = PD.esc, svc = PD.svc;

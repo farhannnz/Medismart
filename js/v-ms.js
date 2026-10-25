@@ -3,7 +3,7 @@
 'use strict';
 var PD = window.PD, esc = PD.esc, svc = PD.svc, $ = PD.$;
 
-function band() { return '<div class="msband"><span class="mslogo">' + PD.icon('pill') + '</span><b>PharmaDesk</b></div>'; }
+function band() { return '<div class="msband"><span class="mslogo">' + PD.icon('pill') + '</span><b>Medismart</b></div>'; }
 function supSelect(id) { return '<select class="in" id="' + id + '"><option value="">— select supplier —</option>' + PD.DB.suppliers.filter(function (s) { return s.active !== false; }).map(function (s) { return '<option value="' + s.id + '">' + esc(s.name) + '</option>'; }).join('') + '</select>'; }
 function field(label, inner, cls) { return '<div class="pf ' + (cls || '') + '"><label>' + label + '</label>' + inner + '</div>'; }
 
@@ -123,7 +123,7 @@ PD.views.expclaim = { render: function (host, arg) {
 } };
 
 /* ---------- Item master dialog ---------- */
-function bluePage(title, sub, icon, inner) { return '<div class="bluepg"><div class="bluelogo">' + PD.icon('pill') + 'Pharma<em>Desk</em></div><div class="dlg"><div class="dlgh"><span class="dico">' + PD.icon(icon) + '</span><div><b>' + title + '</b><br><small>' + sub + '</small></div></div>' + inner + '</div></div>'; }
+function bluePage(title, sub, icon, inner) { return '<div class="bluepg"><div class="bluelogo">' + PD.icon('pill') + 'Medi<em>smart</em></div><div class="dlg"><div class="dlgh"><span class="dico">' + PD.icon(icon) + '</span><div><b>' + title + '</b><br><small>' + sub + '</small></div></div>' + inner + '</div></div>'; }
 PD.views.itemdlg = { render: function (host, arg) {
   var D = PD.DB, cur = null;
   var F = [['name', 'Name :', 'text', 1], ['generic', 'Generic Name :', 'text', 1], ['pack', 'Pack :', 'text'], ['tax', 'P.Tax % :', 'number'], ['vat', 'VAT % :', 'number'], ['punit', 'Purchase Unit :', 'text'], ['unit', 'Sales Unit :', 'text'], ['conv', 'Ratio :', 'number'], ['cat', 'Type :', 'sel:cat'], ['schedule', 'Schedule :', 'sel:sch'], ['mfrId', 'Manufacturer :', 'sel:mfr'], ['division', 'Division :', 'text'], ['reorder', 'Reorder Quantity :', 'number'], ['margin', 'Margin % :', 'number'], ['rack', 'Rack :', 'text'], ['d1', 'D%1 :', 'number'], ['d2', 'D%2 :', 'number'], ['mrp', 'Unit Rate :', 'number'], ['remarks', 'Remarks :', 'text', 1]];

@@ -3,7 +3,7 @@
 'use strict';
 var PD = window.PD, esc = PD.esc, svc = PD.svc, $ = PD.$;
 
-function band(t) { return '<div class="msband"><span class="mslogo">' + PD.icon('pill') + '</span><b>' + esc(t || 'PharmaDesk') + '</b></div>'; }
+function band(t) { return '<div class="msband"><span class="mslogo">' + PD.icon('pill') + '</span><b>' + esc(t || 'Medismart') + '</b></div>'; }
 function field(label, inner, cls) { return '<div class="pf ' + (cls || '') + '"><label>' + label + '</label>' + inner + '</div>'; }
 function badge(s) { var c = { Pending: 'warn', Approved: 'ok', 'Partly approved': 'info', Rejected: 'bad', Cancelled: '', Received: 'ok', 'Received (short)': 'warn', 'In transit': 'info' }[s] || ''; return '<span class="badge ' + c + '">' + esc(s) + '</span>'; }
 function download(name, obj) { var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
@@ -71,7 +71,7 @@ PD.views.receive = { render: function (host, arg) {
   host.innerHTML = '<div class="msw pw">' + band() + '<div class="subtab"><span>Receive Stock</span></div>' +
     '<div class="phead"><fieldset><legend>Dispatch Details</legend>' + field('Dispatch :', '<select class="in" id="ds"><option value="">— none in transit —</option>' + open.map(function (x) { return '<option value="' + x.id + '"' + (x.id === cur ? ' selected' : '') + '>' + esc(x.no + ' • ' + PD.fmtDate(x.date)) + '</option>'; }).join('') + '</select>') + field('Request :', '<input class="in" readonly value="' + esc(d ? d.requestNo : '') + '">') + field('Sent by :', '<input class="in" readonly value="' + esc(d ? d.by : '') + '">') + '</fieldset>' +
     '<fieldset class="sd"><legend>Warehouse</legend>' + field('From :', '<input class="in" readonly value="' + esc(D.settings.whName) + '">', 'wide') + field('Note :', '<input class="in" readonly value="' + esc(d ? d.note : '') + '">', 'wide') + '<div class="pf wide"><label>&nbsp;</label><label class="chk"><input type="checkbox" id="cashp"> Cash paid on receipt</label></div></fieldset></div>' +
-    '<datalist id="shelfs">' + svc.shelfList().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist><div class="pgrid"><table class="t"><thead><tr><th>#</th><th>Item</th><th>Batch</th><th>Exp</th><th>Shelf</th><th class="r">Sent</th><th class="r">Received</th><th class="r">Rate</th><th class="r">MRP</th><th class="r">GST%</th><th class="r">Amount</th></tr></thead><tbody id="rb"></tbody></table>' + (d ? '' : '<div class="empty">No dispatch is waiting. Raise a request (Order → Stock Request), then import the dispatch file from the warehouse software here (or use the Demo button in the Request List).</div>') + '</div>' +
+    '<div class="scanbox"><label>Scan strips to count (optional):</label><input class="in" id="scn" autocomplete="off" placeholder="scan each strip with the scanner" style="max-width:340px"><span id="fb" class="fb"></span></div><datalist id="shelfs">' + svc.shelfList().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist><div class="pgrid"><table class="t"><thead><tr><th>#</th><th>Item</th><th>Batch</th><th>Exp</th><th>Shelf</th><th class="r">Sent</th><th class="r">Received</th><th class="r">Rate</th><th class="r">MRP</th><th class="r">GST%</th><th class="r">Amount</th></tr></thead><tbody id="rb"></tbody></table>' + (d ? '' : '<div class="empty">No dispatch is waiting. Raise a request (Order → Stock Request), then import the dispatch file from the warehouse software here (or use the Demo button in the Request List).</div>') + '</div>' +
     '<div class="msbot"><div class="mspanel"><div class="subtabs"><span class="on">&nbsp;&nbsp;.&nbsp;&nbsp;</span></div><div class="mspb"><div class="r3"><span class="hint">Count the goods and enter the quantity actually received. Decide the shelf: a medicine already in your shop shows its shelf, keep it there; a new medicine needs a shelf before you can receive it. Stock, GST input and the amount payable to the warehouse are posted when you click Receive.</span></div></div></div><div class="mstot"><div class="tl"><label>Total :</label><input class="in" id="t1" readonly value="0.00"></div><div class="tl"><label>Tax :</label><input class="in" id="t2" readonly value="0.00"></div><div class="net"><span>Net Total :</span><b id="t3">0.00</b></div></div></div>' +
     '<div class="msbtns"><button class="mb" id="imp">Import dispatch file</button><button class="mb" id="rl">Request List</button><span class="sp"></span><button class="mb" id="rcv"' + (d ? '' : ' disabled') + '>✔ Receive</button></div></div>';
   function shelfCell(l, i) {
@@ -81,6 +81,21 @@ PD.views.receive = { render: function (host, arg) {
   function totals() { var t = 0, x = 0; if (d) d.lines.forEach(function (l, i) { var q = recv[i] != null ? recv[i] : l.qty, a = q * l.rate; t += a; x += a * l.tax / 100; }); $('#t1', host).value = PD.n2(t); $('#t2', host).value = PD.n2(x); $('#t3', host).textContent = PD.n2(t + x); if (d) PD.$$('[data-am]', host).forEach(function (c) { var l = d.lines[+c.dataset.am], q = recv[+c.dataset.am] != null ? recv[+c.dataset.am] : l.qty; c.textContent = PD.n2(q * l.rate * (1 + l.tax / 100)); }); }
   if (d) { $('#rb', host).innerHTML = d.lines.map(function (l, i) { return '<tr><td>' + (i + 1) + '</td><td>' + esc(svc.itemName(l.itemId)) + '</td><td>' + esc(l.batchNo) + '</td><td>' + PD.fmtExp(l.expiry) + '</td><td>' + shelfCell(l, i) + '</td><td class="r">' + PD.qty(l.qty) + '</td><td class="r"><input class="in sm" type="number" step="any" min="0" max="' + l.qty + '" data-q="' + i + '" value="' + l.qty + '" style="width:70px"></td><td class="r">' + PD.n2(l.rate) + '</td><td class="r">' + PD.n2(l.mrp) + '</td><td class="r">' + l.tax + '</td><td class="r" data-am="' + i + '"></td></tr>'; }).join(''); }
   PD.on(host, 'input', '[data-q]', function (e, t) { recv[+t.dataset.q] = PD.num(t.value); totals(); });
+  var seen = {}, scanMode = false;
+  var scn = $('#scn', host);
+  if (scn) scn.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return; e.preventDefault(); var txt = scn.value; scn.value = ''; var fb = $('#fb', host); if (!txt.trim() || !d) return;
+    function say(ok, m) { fb.innerHTML = '<span style="color:' + (ok ? '#2e8b57' : '#c62828') + '">' + (ok ? '✔ ' : '✖ ') + esc(m) + '</span>'; }
+    var st = svc.parseStrip(txt); if (!st) { say(false, 'Not a Medismart strip code'); return; }
+    var idx = d.lines.findIndex(function (l) { var it = svc.item(l.itemId); return it.name.toLowerCase() === String(st.name).toLowerCase() && l.batchNo === st.batchNo; });
+    if (idx < 0) { say(false, st.name + ' (batch ' + st.batchNo + ') is not in this dispatch'); return; }
+    var l = d.lines[idx]; if (l.serials && l.serials.length && l.serials.indexOf(st.serial) < 0) { say(false, st.serial + ' was not sent in this dispatch'); return; }
+    if (seen[st.serial]) { say(false, st.serial + ' already scanned'); return; }
+    if (!scanMode) { scanMode = true; d.lines.forEach(function (x, i) { recv[i] = 0; }); PD.$$('[data-q]', host).forEach(function (x) { x.value = 0; }); }
+    if ((recv[idx] || 0) >= l.qty) { say(false, 'Already counted all ' + l.qty + ' of ' + st.name); return; }
+    seen[st.serial] = 1; recv[idx] = (recv[idx] || 0) + 1; var inp = $('[data-q="' + idx + '"]', host); if (inp) inp.value = recv[idx]; totals();
+    say(true, st.name + ' • ' + recv[idx] + ' / ' + l.qty);
+  });
   totals();
   $('#ds', host).onchange = function () { PD.views.receive.render(host, { dispatchId: this.value }); };
   $('#rl', host).onclick = function () { PD.go('reqlist'); };
@@ -116,5 +131,48 @@ PD.views.shelves = { render: function (host, arg) {
   rows();
   $('#sf', host).onchange = rows; $('#sq', host).oninput = rows;
   PD.on($('#sb', host), 'click', '[data-sv]', function (e, t) { var inp = $('[data-i="' + t.dataset.sv + '"]', host); try { svc.setShelf(t.dataset.sv, inp.value); PD.toast('Shelf saved', 'ok'); PD.views.shelves.render(host, { f: $('#sf', host).value, q: $('#sq', host).value }); } catch (er) { PD.err(er); } });
+} };
+
+/* ================= RETURN STOCK TO THE WAREHOUSE (scan strips, reason per row) ================= */
+PD.views.whreturn = { render: function (host) {
+  var d = PD.DB, rows = [], REASONS = ['Expired', 'Near expiry', 'Damaged', 'Wrong item received', 'Excess stock', 'Other'];
+  host.innerHTML = '<div class="msw whw"><div class="msband"><span class="mslogo">' + PD.icon('pill') + '</span><b>Return Stock to Warehouse</b></div><div style="padding:8px 12px">' +
+    '<div class="scanbox"><label>Scan strip:</label><input class="in" id="scn" autocomplete="off" placeholder="click here, then scan each strip you are returning" style="font-size:15px"><span id="fb" class="fb">Put the strips on the table and scan them one by one. Choose a reason for each row.</span></div>' +
+    '<div class="row" style="margin:6px 0"><b>Or add without a label:</b><input class="in sm" id="mi" placeholder="medicine name" autocomplete="off" style="max-width:240px"><select class="in sm" id="mb" style="width:auto"></select><input class="in sm" id="mq" type="number" min="1" value="1" style="width:70px"><button class="btn sm" id="ma">Add</button></div>' +
+    '<div class="msgrid" style="margin:4px 0;background:#fff;min-height:120px"><table class="t"><thead><tr><th>Medicine</th><th>Batch</th><th>Exp</th><th class="r">In shop</th><th class="r">Return qty</th><th>Reason *</th><th>Note</th><th></th></tr></thead><tbody id="rb"></tbody></table></div>' +
+    '<div class="row" style="margin:6px 0"><input class="in" id="rn" placeholder="Note for the warehouse (optional)" style="flex:1"><button class="btn p" id="sn">Send return request</button></div><div id="hist"></div></div></div>';
+  var scn = $('#scn', host), mi = $('#mi', host), mb = $('#mb', host), pickedItem = '';
+  function draw() {
+    $('#rb', host).innerHTML = rows.map(function (r, i) { var b = svc.batch(r.batchId); return '<tr><td><b>' + esc(svc.itemName(b.itemId)) + '</b></td><td>' + esc(b.batchNo) + '</td><td>' + PD.expBadge(b.expiry) + '</td><td class="r">' + PD.qty(b.qty) + '</td><td class="r"><input class="in sm" data-q="' + i + '" type="number" min="0" max="' + b.qty + '" value="' + r.qty + '" style="width:70px"></td><td><select class="in sm" data-r="' + i + '"><option value="">— choose —</option>' + REASONS.map(function (x) { return '<option' + (x === r.reason ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></td><td><input class="in sm" data-n="' + i + '" value="' + esc(r.note || '') + '"></td><td><button class="btn sm" data-x="' + i + '">✕</button></td></tr>'; }).join('') || '<tr><td colspan="8"><div class="empty">Nothing scanned yet.</div></td></tr>';
+    $('#sn', host).textContent = 'Send return request' + (rows.length ? ' (' + rows.reduce(function (a, r) { return a + PD.num(r.qty); }, 0) + ' strips)' : '');
+  }
+  function addBatch(b, serial) {
+    var r = rows.find(function (x) { return x.batchId === b.id; });
+    if (!r) { var dd = PD.daysToExp(b.expiry); r = { batchId: b.id, qty: 0, reason: dd < 0 ? 'Expired' : dd <= 90 ? 'Near expiry' : '', note: '', serials: [] }; rows.push(r); }
+    if (r.qty + 1 > b.qty + 1e-9) return false; r.qty += 1; if (serial) r.serials.push(serial); return true;
+  }
+  scn.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return; e.preventDefault(); var txt = scn.value; scn.value = ''; if (!txt.trim()) return; var fb = $('#fb', host);
+    function say(ok, m) { fb.innerHTML = '<span style="color:' + (ok ? '#2e8b57' : '#c62828') + '">' + (ok ? '✔ ' : '✖ ') + esc(m) + '</span>'; }
+    var st = svc.parseStrip(txt); if (!st) { say(false, 'Not a Medismart strip code'); return; }
+    if (d.returnedSerials[st.serial]) { say(false, st.serial + ' was already returned (' + d.returnedSerials[st.serial] + ')'); return; }
+    if (rows.some(function (r) { return r.serials.indexOf(st.serial) >= 0; })) { say(false, st.serial + ' already scanned'); return; }
+    var b = svc.findBatchFor(st); if (!b) { say(false, st.name + ' (batch ' + st.batchNo + ') is not in your stock'); return; }
+    if (!addBatch(b, st.serial)) { say(false, 'Only ' + PD.qty(b.qty) + ' of this batch is in your shop'); return; }
+    say(true, st.name + ' • batch ' + st.batchNo + ' • exp ' + PD.fmtExp(b.expiry)); draw(); scn.focus();
+  });
+  PD.combo(mi, { source: PD.itemSource({}), onPick: function (x) { pickedItem = x.id; mb.innerHTML = svc.batchesOf(x.id, false).filter(function (b) { return b.qty > 0; }).map(function (b) { return '<option value="' + b.id + '">' + esc(b.batchNo) + ' • exp ' + PD.fmtExp(b.expiry) + ' • ' + PD.qty(b.qty) + '</option>'; }).join('') || '<option value="">no stock</option>'; } });
+  $('#ma', host).onclick = function () { var b = mb.value && svc.batch(mb.value); if (!b) { PD.toast('Pick a medicine and a batch', 'err'); return; } var q = Math.max(1, Math.floor(PD.num($('#mq', host).value))); var ok = true; for (var i = 0; i < q; i++) ok = addBatch(b) && ok; if (!ok) PD.toast('Only ' + PD.qty(b.qty) + ' in this batch', 'err'); mi.value = ''; mb.innerHTML = ''; draw(); };
+  PD.on(host, 'input', '[data-q]', function (e, t) { rows[+t.dataset.q].qty = PD.num(t.value); });
+  PD.on(host, 'change', '[data-r]', function (e, t) { rows[+t.dataset.r].reason = t.value; });
+  PD.on(host, 'input', '[data-n]', function (e, t) { rows[+t.dataset.n].note = t.value; });
+  PD.on(host, 'click', '[data-x]', function (e, t) { rows.splice(+t.dataset.x, 1); draw(); });
+  $('#sn', host).onclick = function () {
+    try { var rec = svc.sendReturn({ lines: rows, note: $('#rn', host).value }); download(rec.no + '.return.json', svc.returnFile(rec)); PD.toast('Return ' + rec.no + ' sent. File saved to Downloads, give it to the warehouse.', 'ok'); PD.views.whreturn.render(host); } catch (e) { PD.err(e); }
+  };
+  var h = d.wreturns.slice().reverse().slice(0, 15);
+  $('#hist', host).innerHTML = h.length ? '<h4 style="margin:12px 0 4px">Earlier return requests</h4><div class="msgrid" style="margin:0;background:#fff"><table class="t"><thead><tr><th>Return</th><th>Date</th><th class="r">Lines</th><th class="r">Strips</th><th class="r">Value</th><th></th></tr></thead><tbody>' + h.map(function (r) { return '<tr><td><b>' + esc(r.no) + '</b></td><td>' + PD.fmtDate(r.date) + '</td><td class="r">' + r.lines.length + '</td><td class="r">' + r.lines.reduce(function (a, l) { return a + l.qty; }, 0) + '</td><td class="r">' + PD.n2(r.value) + '</td><td class="r"><button class="btn sm" data-ex="' + r.id + '">Export file again</button></td></tr>'; }).join('') + '</tbody></table></div>' : '';
+  PD.on(host, 'click', '[data-ex]', function (e, t) { var r = d.wreturns.find(function (x) { return x.id === t.dataset.ex; }); download(r.no + '.return.json', svc.returnFile(r)); });
+  draw(); scn.focus();
 } };
 })();
