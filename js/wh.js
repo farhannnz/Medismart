@@ -22,8 +22,19 @@ function mfrId(name) {
   return m ? m.id : svc.saveMaster('mfrs', { name: name, city: '', active: true }).id;
 }
 function findItem(name) { name = String(name || '').trim().toLowerCase(); return D().items.find(function (i) { return i.name.toLowerCase() === name; }); }
+/* warehouse counts strips; the shop counts tablets. A warehouse record with `per` (tablets per strip) becomes:
+   sale unit = Tab (or Cap / ml...), pack unit = Strip, conv = per, MRP and reorder level per tablet. */
+svc.fromWarehouse = function (l) {
+  if (!l || !(PD.num(l.per) >= 1)) return l;
+  var per = PD.num(l.per), o = Object.assign({}, l);
+  o.unit = l.sunit || 'Tab'; o.punit = per > 1 ? 'Strip' : o.unit; o.conv = per;
+  if (l.mrp != null) o.mrp = PD.r2(PD.num(l.mrp) / per);
+  if (l.reorder != null) o.reorder = PD.num(l.reorder) * per;
+  return o;
+};
 svc.upsertItem = function (l, forceNew) {
   if (!l || !String(l.name || '').trim()) throw new Error('An item has no name');
+  l = svc.fromWarehouse(l);
   var it = findItem(l.name), fresh = !it;
   var v = { generic: l.generic, cat: l.cat, schedule: l.schedule, tax: l.tax, mrp: l.mrp, unit: l.unit, punit: l.punit, conv: l.conv, hsn: l.hsn, division: l.division, reorder: l.reorder };
   if (l.mfr) v.mfrId = mfrId(l.mfr);
@@ -68,7 +79,9 @@ svc.importDispatch = function (f) {
   var lines = (f.lines || []).map(function (l) {
     if (!(PD.num(l.qty) > 0)) throw new Error('Bad quantity for ' + l.name);
     var it = findItem(l.name); if (!it) it = svc.upsertItem(Object.assign({ mrp: l.mrp, tax: l.tax }, l)).item;
-    return { itemId: it.id, reqIdx: l.reqIdx, batchNo: l.batchNo || 'NA', expiry: l.expiry || '', mrp: PD.num(l.mrp) || it.mrp, rate: PD.num(l.rate), qty: PD.num(l.qty), tax: l.tax != null ? PD.num(l.tax) : (it.tax || 0), serials: Array.isArray(l.serials) ? l.serials : [] };
+    else if (PD.num(l.per) >= 1 && it.conv !== PD.num(l.per)) { var w = svc.fromWarehouse(l); it.unit = w.unit; it.punit = w.punit; it.conv = w.conv; }
+    var per = PD.num(l.per) >= 1 ? PD.num(l.per) : 1;
+    return { itemId: it.id, reqIdx: l.reqIdx, batchNo: l.batchNo || 'NA', expiry: l.expiry || '', mrp: PD.num(l.mrp) ? PD.r2(PD.num(l.mrp) / per) : it.mrp, rate: PD.r2(PD.num(l.rate) / per), qty: PD.num(l.qty) * per, per: per, strips: PD.num(l.qty), tax: l.tax != null ? PD.num(l.tax) : (it.tax || 0), serials: Array.isArray(l.serials) ? l.serials : [] };
   });
   if (!lines.length) throw new Error('The dispatch file has no items');
   var r = D().requests.find(function (x) { return x.no === f.requestNo; });
@@ -157,7 +170,10 @@ svc.sendReturn = function (o) {
   PD.log('Return to warehouse ' + rec.no, out.length + ' lines ' + PD.n2(pr.total)); PD.save(); return rec;
 };
 svc.returnFile = function (r) {
-  return { type: 'return', v: 2, shop: D().shop.name, no: r.no, date: r.date, note: r.note, lines: r.lines.map(function (l) { return { name: l.name, batchNo: l.batchNo, expiry: l.expiry, mrp: l.mrp, rate: l.rate, qty: l.qty, reason: l.reason, note: l.note, serials: l.serials }; }) };
+  return { type: 'return', v: 2, shop: D().shop.name, no: r.no, date: r.date, note: r.note, lines: r.lines.map(function (l) {
+    var it = svc.item(l.itemId), per = it && it.punit === 'Strip' && it.conv > 1 ? it.conv : 1;
+    return { name: l.name, batchNo: l.batchNo, expiry: l.expiry, mrp: PD.r2(l.mrp * per), rate: PD.r2(l.rate * per), qty: PD.r2(l.qty / per), tabs: l.qty, reason: l.reason, note: l.note, serials: l.serials };
+  }) };
 };
 
 /* ---------- attendance ---------- */

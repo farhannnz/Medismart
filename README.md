@@ -1,17 +1,16 @@
 # Medismart (PharmaDesk)
 
-Simple medical-shop software (billing, stock, shelves, accounts, staff + attendance) in a classic desktop layout. Stock comes only from the warehouse (separate software): shop requests → warehouse dispatches → shop receives and assigns shelves. **Login: admin / admin** (also staff/staff). See [Medismart-User-Guide.pdf](Medismart-User-Guide.pdf) and [USAGE.md](USAGE.md).
+Simple medical-shop software (billing, stock, shelves, accounts, staff + attendance) in a classic desktop layout. Stock comes only from the warehouse (separate software): shop requests → warehouse dispatches → shop receives and assigns shelves. Data is saved online (Firebase) and the shop ↔ warehouse link is live. **Setup: [SETUP.md](SETUP.md).**
 
-Modern pharmacy billing, inventory and accounts software that runs in the browser (no install, works offline).
+Modern pharmacy billing, inventory and accounts software that runs in the browser (no install).
 
 ## Run it
-- Double-click `index.html` (works from the file system), or serve the folder with any static host (Vercel, Netlify, GitHub Pages).
-- Local preview: `python -m http.server 8761` inside this folder, then open http://localhost:8761
-- First run loads demo data. Sign in with **admin / admin**, then change the password in Settings.
+- Serve the folder with any static host (Vercel, Netlify) or locally: `python -m http.server 8761` inside this folder, then open http://localhost:8761
+- First run: connect the computer with the online password, then set the shop name and admin password (see SETUP.md).
 
 ## Tech
 - Plain HTML + CSS + JavaScript (no framework, no build step)
-- Data: browser IndexedDB (falls back to localStorage); backup/restore as a JSON file from Settings
+- Data: Firebase Firestore (`js/cloud.js`), with a local copy so an internet drop loses nothing; backup/restore as a JSON file from Settings
 - Charts: hand-built inline SVG
 - Printing: browser print (thermal 58/80 mm receipts and A4 reports)
 
