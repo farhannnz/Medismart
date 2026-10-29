@@ -165,9 +165,12 @@ function shell() {
 }
 function landing(fresh) {
   wins = []; cur = 'home';
-  if (fresh) { var a = PD.alerts().filter(function (x) { return x.lvl !== 'info'; }); if (a.length && PD.toast) PD.toast('🔔 ' + a.length + ' alert' + (a.length > 1 ? 's' : '') + ': ' + a[0].text + (a.length > 1 ? ' …see Messages panel' : ''), a[0].lvl === 'bad' ? 'err' : ''); }
+  if (fresh) { var a = PD.alertList().filter(function (x) { return x.lvl !== 'info'; }); if (a.length && PD.toast) PD.toast('🔔 ' + a.length + ' alert' + (a.length > 1 ? 's' : '') + ': ' + a[0].text + (a.length > 1 ? ' …see Messages panel' : ''), a[0].lvl === 'bad' ? 'err' : ''); }
 }
-PD.refreshAlerts = function () { var dw = $('#drw'); if (dw && svc.drawerBalance) dw.textContent = 'Drawer ₹' + PD.n2(svc.drawerBalance()); var n = PD.alerts(), b = $('#bell'); if (b) { var hot = n.filter(function (x) { return x.lvl !== 'info'; }).length; b.textContent = '🔔 ' + n.length; b.className = 'bell' + (hot ? ' hot' : ''); } if (docks.msg) fillDock('msg', ''); };
+/* alerts never block billing: a missing or failing alerts check just shows none */
+PD.alertList = function () { try { return typeof PD.alerts === 'function' ? PD.alerts() || [] : []; } catch (e) { console.error('alerts', e); return []; } };
+PD.refreshAlerts = function () { try { refreshAlerts(); } catch (e) { console.error('refreshAlerts', e); } };
+function refreshAlerts() { var dw = $('#drw'); if (dw && svc.drawerBalance) dw.textContent = 'Drawer ₹' + PD.n2(svc.drawerBalance()); var n = PD.alertList(), b = $('#bell'); if (b) { var hot = n.filter(function (x) { return x.lvl !== 'info'; }).length; b.textContent = '🔔 ' + n.length; b.className = 'bell' + (hot ? ' hot' : ''); } if (docks.msg) fillDock('msg', ''); }
 function tick() { var c = $('#clk'); if (c) { var d = new Date(); c.textContent = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US'); } }
 var ACTION_RX = /^(dock|toggle|nav|closecur|closeall|closeother|palette|about|home|logout|closeshift|disconnect)/;
 function okItem(it) { if (it === '-' || it[0] === '%wins') return true; if (it[4] === 'direct' && !PD.DB.settings.allowDirect) return false; if (ACTION_RX.test(it[1])) return true; return can(it[1]); }
@@ -218,7 +221,7 @@ function fillDock(k, q) {
   } else if (k === 'sups') {
     h = '<table class="gt"><thead><tr><th>Supplier Name</th></tr></thead><tbody>' + D.suppliers.filter(function (m) { return !q || m.name.toLowerCase().indexOf(q) >= 0; }).map(function (m) { return '<tr data-m="suppliers"><td>' + esc(m.name) + '</td></tr>'; }).join('') + '</tbody></table>';
   } else {
-    var al = PD.alerts(); h = '<div class="msgp"><div class="msgh">Hello, ' + esc(PD.user.name) + '</div>' + (al.length ? al.map(function (x, i) { return '<div class="al ' + x.lvl + '" data-al="' + i + '">' + PD.icon(x.icon || 'alert') + '<span>' + esc(x.text) + '</span></div>'; }).join('') : '<div class="al ok">✔ All clear. No alerts.</div>') + '</div>'; fillDock.alerts = al;
+    var al = PD.alertList(); h = '<div class="msgp"><div class="msgh">Hello, ' + esc(PD.user.name) + '</div>' + (al.length ? al.map(function (x, i) { return '<div class="al ' + x.lvl + '" data-al="' + i + '">' + PD.icon(x.icon || 'alert') + '<span>' + esc(x.text) + '</span></div>'; }).join('') : '<div class="al ok">✔ All clear. No alerts.</div>') + '</div>'; fillDock.alerts = al;
   }
   el.innerHTML = h;
 }
