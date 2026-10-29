@@ -17,11 +17,13 @@ svc.shiftFigures = function (sh) {
 svc.lastClosingCash = function (userId) { var l = D().shifts.filter(function (s) { return s.status === 'closed'; }); return l.length ? l[l.length - 1].closeCash : 0; };
 /* the drawer carries on from where the last shift ended - nothing to type at the start */
 svc.drawerBalance = function () { var open = D().shifts.filter(function (s) { return s.status === 'open'; }); return open.length ? svc.shiftFigures(open[open.length - 1]).expected : svc.lastClosingCash(); };
-svc.shiftStart = function (user, openCash) {
+svc.shiftStart = function (user, openCash, o) {
+  o = o || {};
   if (svc.shiftOpen(user.id)) throw new Error('A shift is already open for ' + user.name);
   openCash = PD.num(openCash); if (openCash < 0) throw new Error('Cash cannot be negative');
   var sh = { id: PD.uid('sf'), userId: user.id, username: user.username, name: user.name, date: PD.today(), startKey: nowKey(), startAt: PD.nowTime(), openCash: openCash, status: 'open', endAt: '', endKey: '', closeCash: null, expected: 0, diff: 0, note: '' };
-  D().shifts.push(sh); PD.log('Shift started', user.username + ' opening cash ' + PD.n2(openCash)); PD.save(); return sh;
+  if (o.carried != null) { sh.carried = PD.r2(PD.num(o.carried)); sh.openDiff = PD.r2(openCash - sh.carried); sh.prevId = o.prevId || ''; sh.openNote = o.note || ''; }
+  D().shifts.push(sh); PD.log('Shift started', user.username + ' counted ' + PD.n2(openCash) + (o.carried != null ? ' (last shift left ' + PD.n2(o.carried) + ')' : '')); PD.save(); return sh;
 };
 svc.shiftClose = function (sh, closeCash, note) {
   if (sh.status !== 'open') throw new Error('This shift is already closed');
@@ -45,9 +47,26 @@ svc.cashMove = function (o) {
 };
 
 /* ---------- modals ---------- */
-PD.shiftAuto = function (user) {
-  user = user || PD.user; if (!user || svc.shiftOpen(user.id)) return null;
-  var sh = svc.shiftStart(user, svc.drawerBalance()); PD.toast('Shift started. Drawer opens with ₹' + PD.n2(sh.openCash) + ' (carried over automatically)', 'ok'); if (PD.refreshAlerts) PD.refreshAlerts(); return sh;
+/* shift start = handover: show what the last shift left in the drawer, the new person counts it and confirms */
+svc.lastClosedShift = function () { var l = D().shifts.filter(function (s) { return s.status === 'closed'; }); return l.length ? l[l.length - 1] : null; };
+PD.shiftAuto = function (user, done) {
+  user = user || PD.user; if (!user || svc.shiftOpen(user.id)) { if (done) done(); return null; }
+  var last = svc.lastClosedShift(), other = D().shifts.filter(function (s) { return s.status === 'open'; }).pop();
+  var carried = other ? svc.drawerBalance() : (last ? last.closeCash || 0 : 0);
+  var info = other ? '<p><b>' + esc(other.name) + '</b> still has a shift open (since ' + esc(other.startAt) + '). Cash in the drawer should be <b>₹' + PD.n2(carried) + '</b>.</p>'
+    : last ? '<table class="t" style="max-width:440px"><tbody><tr><td>Last shift</td><td class="r"><b>' + esc(last.name) + '</b></td></tr><tr><td>Ended</td><td class="r">' + PD.fmtDate(last.date) + ' ' + esc(last.endAt || '') + '</td></tr><tr><td>Cash left in the drawer</td><td class="r"><b style="font-size:16px">₹' + PD.n2(carried) + '</b></td></tr>' + (last.diff ? '<tr><td>Their difference at closing</td><td class="r" style="color:#c62828">' + (last.diff > 0 ? '+' : '') + PD.n2(last.diff) + '</td></tr>' : '') + (last.note ? '<tr><td>Their note</td><td class="r">' + esc(last.note) + '</td></tr>' : '') + '</tbody></table>'
+    : '<p>This is the first shift. The drawer should be empty unless the owner put some cash in.</p>';
+  var m = PD.modal({ title: 'Start your shift - ' + user.name, size: 'md', sticky: true, body: info + '<div class="fld" style="margin-top:12px;max-width:260px"><label>Count the cash in the drawer now (₹)</label><input class="in" id="oc" type="number" step="any" autofocus></div><div id="od" style="min-height:20px;margin-top:6px"></div><div class="fld" style="margin-top:8px"><label>Note (if the cash does not match)</label><input class="in" id="on"></div>',
+    foot: [{ label: 'Start my shift', cls: 'p', fn: function (api) { try {
+      var v = PD.$('#oc', api.body).value; if (v === '') throw new Error('Count the cash and type the amount (type 0 if empty)');
+      var sh = svc.shiftStart(user, v, { carried: carried, prevId: last && !other ? last.id : '', note: PD.$('#on', api.body).value });
+      PD.toast('Shift started with ₹' + PD.n2(sh.openCash) + (sh.openDiff ? ' (' + (sh.openDiff > 0 ? 'excess ' : 'short ') + PD.n2(Math.abs(sh.openDiff)) + ' vs last shift)' : ''), sh.openDiff ? 'err' : 'ok');
+      if (PD.refreshAlerts) PD.refreshAlerts(); if (done) done();
+    } catch (e) { PD.err(e); return false; } } }] });
+  var x = PD.$('[data-x]', m.el); if (x) x.remove();   /* the shift must be started (cash counted) */
+  var oc = PD.$('#oc', m.el); oc.oninput = function () { var d = PD.num(oc.value) - carried; PD.$('#od', m.el).innerHTML = oc.value === '' ? '' : (Math.abs(d) < 0.005 ? '<span style="color:#2e8b57">Matches ✔</span>' : '<span style="color:#c62828">' + (d > 0 ? 'Excess ' : 'Short ') + PD.n2(Math.abs(d)) + '</span>'); };
+  setTimeout(function () { oc.focus(); }, 50);
+  return m;
 };
 PD.shiftCloseModal = function (done, forLogout) {
   var sh = svc.shiftOpen(PD.user.id); if (!sh) { if (done) done(); return; }
@@ -72,9 +91,9 @@ PD.views.cashreg = { render: function (host, arg) {
   }
   var open = d.shifts.filter(function (s) { return s.status === 'open' && (admin || s.userId === me.id); });
   host.innerHTML = '<div class="msw whw"><div class="msband"><span class="mslogo">' + PD.icon('pill') + '</span><b>Cash Register &amp; Shifts</b></div><div style="padding:8px 12px"><div class="drawerbig">Cash in drawer now (automatic): <b>₹' + PD.n2(svc.drawerBalance()) + '</b><small>opening + cash sales - refunds + cash in - cash out. Updates with every bill.</small></div>' +
-    (open.length ? open.map(function (s) { return card(s, s.userId === me.id ? 'Your open shift' : 'Open drawer'); }).join('') : '<div class="card" style="margin-bottom:8px"><div class="bd">No shift is open. ' + (me ? '<button class="btn p" id="st">Start my shift</button> <span class="hint">The drawer carries on automatically from the last shift.</span>' : '') + '</div></div>') +
+    (open.length ? open.map(function (s) { return card(s, s.userId === me.id ? 'Your open shift' : 'Open drawer'); }).join('') : '<div class="card" style="margin-bottom:8px"><div class="bd">No shift is open. ' + (me ? '<button class="btn p" id="st">Start my shift</button> <span class="hint">You will see what the last shift left in the drawer and count it.</span>' : '') + '</div></div>') +
     '<div class="row" style="margin-bottom:8px">' + (mine ? '<button class="btn p" id="cl">Close my shift</button>' : '') + (admin ? '<button class="btn" id="mv">Cash in / out / handover (admin)</button>' : '') + '</div><div id="sl"></div></div></div>';
-  var st = $('#st', host); if (st) st.onclick = function () { PD.shiftAuto(); PD.views.cashreg.render(host); };
+  var st = $('#st', host); if (st) st.onclick = function () { PD.shiftAuto(null, function () { PD.views.cashreg.render(host); }); };
   var cl = $('#cl', host); if (cl) cl.onclick = function () { PD.shiftCloseModal(function () { PD.views.cashreg.render(host); }); };
   var mv = $('#mv', host); if (mv && arg && arg.mv) setTimeout(function () { mv.click(); }, 50); if (mv) mv.onclick = function () {
     if (!open.length) { PD.toast('No drawer is open. Start a shift first.', 'err'); return; }
@@ -84,8 +103,8 @@ PD.views.cashreg = { render: function (host, arg) {
   PD.report($('#sl', host), { id: 'cash-shifts', title: admin ? 'All shifts (who logged in, cash at start and end)' : 'My shifts',
     filters: [{ k: 'from', label: 'From', type: 'date', val: function () { return PD.addDays(PD.today(), -30); } }, { k: 'to', label: 'To', type: 'date', val: PD.today }].concat(admin ? [{ k: 'u', label: 'Staff', type: 'select', options: function () { return [['', 'Everyone']].concat(d.users.map(function (u) { return [u.id, u.name]; })); } }] : []),
     load: function (f) {
-      var rows = d.shifts.filter(function (s) { return s.date >= f.from && s.date <= f.to && (admin ? (!f.u || s.userId === f.u) : s.userId === me.id); }).slice().reverse().map(function (s) { var fg = s.status === 'closed' ? s.fig : svc.shiftFigures(s); return { id: s.id, date: s.date, name: s.name, inAt: s.startAt, outAt: s.endAt || '(open)', open: s.openCash, sales: fg.cashSales, ref: fg.refunds, mv: PD.r2(fg.cin - fg.cout - fg.hand), exp: s.status === 'closed' ? s.expected : fg.expected, close: s.closeCash, diff: s.status === 'closed' ? s.diff : null, note: s.note }; });
-      return { cols: [{ k: 'date', label: 'Date', fmt: PD.fmtDate }, { k: 'name', label: 'User', fmt: function (v) { return '<b>' + esc(v) + '</b>'; } }, { k: 'inAt', label: 'Login' }, { k: 'outAt', label: 'Logout' }, { k: 'open', label: 'Cash at start', align: 'r', fmt: PD.n2 }, { k: 'sales', label: 'Cash sales', align: 'r', sum: true, fmt: PD.n2 }, { k: 'ref', label: 'Refunds', align: 'r', sum: true, fmt: PD.n2 }, { k: 'mv', label: 'In / out', align: 'r', fmt: PD.n2 }, { k: 'exp', label: 'Should be', align: 'r', fmt: PD.n2 }, { k: 'close', label: 'Cash at end', align: 'r', fmt: function (v) { return v == null ? '—' : PD.n2(v); }, raw: function (r) { return r.close == null ? '' : r.close; } },
+      var rows = d.shifts.filter(function (s) { return s.date >= f.from && s.date <= f.to && (admin ? (!f.u || s.userId === f.u) : s.userId === me.id); }).slice().reverse().map(function (s) { var fg = s.status === 'closed' ? s.fig : svc.shiftFigures(s); return { id: s.id, date: s.date, name: s.name, inAt: s.startAt, outAt: s.endAt || '(open)', left: s.carried, odiff: s.openDiff || 0, open: s.openCash, sales: fg.cashSales, ref: fg.refunds, mv: PD.r2(fg.cin - fg.cout - fg.hand), exp: s.status === 'closed' ? s.expected : fg.expected, close: s.closeCash, diff: s.status === 'closed' ? s.diff : null, note: s.note }; });
+      return { cols: [{ k: 'date', label: 'Date', fmt: PD.fmtDate }, { k: 'name', label: 'User', fmt: function (v) { return '<b>' + esc(v) + '</b>'; } }, { k: 'inAt', label: 'Login' }, { k: 'outAt', label: 'Logout' }, { k: 'left', label: 'Left by last shift', align: 'r', fmt: function (v) { return v == null ? '' : PD.n2(v); } }, { k: 'open', label: 'Counted at start', align: 'r', fmt: PD.n2 }, { k: 'odiff', label: 'Start diff', align: 'r', fmt: function (v) { return !v ? '' : '<b style="color:#c62828">' + (v > 0 ? '+' : '') + PD.n2(v) + '</b>'; } }, { k: 'sales', label: 'Cash sales', align: 'r', sum: true, fmt: PD.n2 }, { k: 'ref', label: 'Refunds', align: 'r', sum: true, fmt: PD.n2 }, { k: 'mv', label: 'In / out', align: 'r', fmt: PD.n2 }, { k: 'exp', label: 'Should be', align: 'r', fmt: PD.n2 }, { k: 'close', label: 'Cash at end', align: 'r', fmt: function (v) { return v == null ? '—' : PD.n2(v); }, raw: function (r) { return r.close == null ? '' : r.close; } },
         { k: 'diff', label: 'Difference', align: 'r', sum: true, fmt: function (v) { return v == null ? '' : v === 0 ? '<span class="badge ok">OK</span>' : '<b style="color:#c62828">' + (v > 0 ? '+' : '') + PD.n2(v) + '</b>'; }, raw: function (r) { return r.diff == null ? '' : r.diff; } }, { k: 'note', label: 'Note' }], rows: rows, note: admin ? 'Click a row to see the cash moves or add your remark.' : '' };
     },
     drill: admin ? function (row) {

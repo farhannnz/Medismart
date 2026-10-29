@@ -1,6 +1,6 @@
 /* Warehouse supply chain: shop stock comes only from the warehouse.
    Shop raises a stock REQUEST -> warehouse APPROVES + DISPATCHES (FEFO batches) -> shop RECEIVES, which posts a purchase
-   from the warehouse account (stock in, GST input, payable). Also: attendance helpers. */
+   as a STOCK TRANSFER at the warehouse's cost (same business: no GST, nothing payable; credit goes to Head Office). Also: attendance helpers. */
 (function () {
 'use strict';
 var PD = window.PD, svc = PD.svc;
@@ -8,6 +8,14 @@ function D() { return PD.DB; }
 var WH = 'wh';
 
 /* ---------- the warehouse is an external party (separate software) and the shop's only supplier ---------- */
+/* the shops and the warehouse are one business: stock from the warehouse is credited to Head Office (a capital account), never payable */
+svc.headOffice = function () {
+  var d = D(); if (!d.accounts.some(function (a) { return a.id === 'ho'; })) d.accounts.push({ id: 'ho', name: 'Head Office (Warehouse)', group: 'Capital', nat: 'C', sys: 1 });
+  if (d.hoMoved) return; d.hoMoved = PD.today();
+  /* old data: whatever was "payable to the warehouse" moves to Head Office once */
+  var net = 0; d.vouchers.forEach(function (v) { v.lines.forEach(function (l) { if (l.acc === 'sup_wh') net += l.cr - l.dr; }); }); net = PD.r2(net);
+  if (Math.abs(net) >= 0.01) try { svc.voucher(PD.today(), 'Journal', 'Warehouse is our own head office: balance moved from Warehouse account', net > 0 ? [{ acc: 'sup_wh', dr: net }, { acc: 'ho', cr: net }] : [{ acc: 'ho', dr: -net }, { acc: 'sup_wh', cr: -net }], { kind: 'ho' }); PD.log('Warehouse balance moved to Head Office', PD.n2(net)); } catch (e) { console.warn('ho', e); d.hoMoved = ''; }
+};
 svc.warehouse = function () {
   var s = svc.supplier(WH);
   if (!s) s = svc.saveMaster('suppliers', { id: WH, name: D().settings.whName || 'Main Warehouse', phone: '', terms: 'Warehouse transfer', active: true, links: { mfrs: [], items: [] }, sys: true });
@@ -119,7 +127,7 @@ svc.receiveDispatch = function (id, recv, opts) {
     place[l.itemId] = sh;
   });
   Object.keys(place).forEach(function (id) { svc.item(id).rack = place[id]; });
-  var inv = svc.postPurchase({ supplierId: svc.warehouse().id, invNo: d.no, date: PD.today(), payMode: opts.payMode === 'cash' ? 'cash' : 'credit', lines: lines });
+  var inv = svc.postPurchase({ supplierId: svc.warehouse().id, invNo: d.no, date: PD.today(), transfer: true, lines: lines });
   d.status = short.length ? 'Received (short)' : 'Received'; d.invId = inv.id; d.receivedOn = PD.today(); d.receivedBy = PD.user ? PD.user.name : ''; d.short = short;
   var r = D().requests.find(function (x) { return x.id === d.requestId; }); if (r) r.status = short.length ? 'Received (short)' : 'Received';
   PD.log('Received ' + d.no, inv.no + ' ' + PD.n2(inv.total) + (short.length ? ' (short)' : '')); PD.save(); return inv;
@@ -163,7 +171,7 @@ svc.sendReturn = function (o) {
   if (!lines.length) throw new Error('Scan or add at least one strip to return');
   lines.forEach(function (l) { var b = svc.batch(l.batchId); if (!b) throw new Error('A batch is missing'); if (!l.reason) throw new Error('Choose a reason for ' + svc.itemName(b.itemId)); if (PD.num(l.qty) > b.qty + 1e-9) throw new Error('Only ' + PD.qty(b.qty) + ' of ' + svc.itemName(b.itemId) + ' (batch ' + b.batchNo + ') is in your shop'); });
   var out = lines.map(function (l) { var b = svc.batch(l.batchId), it = svc.item(b.itemId); return { itemId: it.id, name: it.name, batchNo: b.batchNo, expiry: b.expiry, mrp: b.mrp, rate: b.rate, qty: PD.num(l.qty), reason: l.reason, note: l.note || '', serials: l.serials || [] }; });
-  var pr = svc.postPurchaseReturn({ supplierId: svc.warehouse().id, lines: lines.map(function (l) { return { batchId: l.batchId, qty: PD.num(l.qty) }; }), reason: 'Returned to warehouse' });
+  var pr = svc.postPurchaseReturn({ supplierId: svc.warehouse().id, transfer: true, lines: lines.map(function (l) { return { batchId: l.batchId, qty: PD.num(l.qty) }; }), reason: 'Returned to warehouse' });
   var rec = { id: PD.uid('wr'), no: svc.docNo('WR-', 'WRET'), date: PD.today(), time: PD.nowTime(), by: PD.user ? PD.user.name : '', note: o.note || '', lines: out, status: 'Sent', value: pr.total, prId: pr.id };
   D().wreturns.push(rec);
   out.forEach(function (l) { (l.serials || []).forEach(function (s) { D().returnedSerials[s] = rec.no; }); });

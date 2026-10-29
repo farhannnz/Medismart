@@ -25,16 +25,20 @@ PD.applyTheme = function () {
   document.documentElement.style.setProperty('--brand-l', 'color-mix(in srgb, ' + a + ' 16%, var(--card))');
 };
 
-/* ---------- boot ---------- */
+/* ---------- boot: the person is already signed in online (cloud.js), so open straight away ---------- */
 function boot() {
   PD.load().then(function (db) {
     var fresh = !(db && db.v);
     PD.DB = fresh ? PD.blank() : db; migrate();
+    if (fresh || !PD.DB.setupDone) PD.cloud.initDB(PD.DB);
+    if (PD.cloud.shop && PD.cloud.shop.name && fresh) PD.DB.shop.name = PD.cloud.shop.name;
+    PD.cloud.syncUsers();
     PD.applyTheme(); PD.cloud.start();
-    if (fresh || !PD.DB.setupDone) { PD.firstRun(function () { loginScreen(); }); return; }
-    var uid = sessionStorage.getItem('pd_user');
-    PD.user = uid ? PD.DB.users.find(function (u) { return u.id === uid && u.active !== false; }) : null;
-    if (PD.user) { shell(); landing(false); setTimeout(PD.shiftEnsure, 250); } else loginScreen();
+    PD.user = PD.DB.users.find(function (u) { return u.id === PD.cloud.me.id; });
+    var first = !sessionStorage.getItem('pd_in');
+    if (first) { sessionStorage.setItem('pd_in', '1'); PD.log('Signed in'); }
+    if (PD.DB.settings.autoPunch) svc.punchIn(PD.user);
+    PD.save(); shell(); landing(first); setTimeout(PD.shiftEnsure, 250);
   });
 }
 function migrate() {
@@ -42,32 +46,23 @@ function migrate() {
   Object.keys(B).forEach(function (k) { if (D[k] === undefined) D[k] = B[k]; });
   Object.keys(B.settings).forEach(function (k) { if (D.settings[k] === undefined) D.settings[k] = B.settings[k]; });
   svc.currentYear(); svc.warehouse(); D.whSeeded = true; D.newMedDemo = true;
-  /* roles: exactly one Admin (the shop owner) + staff */
-  D.users = D.users.filter(function (u) { return u.role !== 'Warehouse'; });
-  if (D.demo && !D.users.some(function (u) { return u.username === 'staff'; })) D.users.push({ id: 'u_st', name: 'Counter Staff', username: 'staff', pass: PD.hash('staff'), role: 'Staff', rights: { dashboard: true, billing: true, salesret: true, explore: true, requests: true, expiry: true }, active: true });
+  if (svc.headOffice) svc.headOffice();
 }
 
-/* ---------- login ---------- */
-function loginScreen() {
-  document.body.innerHTML = '<div class="login"><div class="card box"><div class="brand" style="padding:0;color:var(--ink)"><span class="lg">' + PD.icon('pill') + '</span><b>Medismart</b></div><h1>Welcome back</h1><p class="mut">Sign in to your pharmacy workspace.</p><br>' +
-    '<div class="fld"><label>Username</label><input class="in" id="lu" autocomplete="username" autofocus></div><div class="fld" style="margin-top:12px"><label>Password</label><input class="in" id="lp" type="password" autocomplete="current-password"></div>' +
-    '<p id="le" style="color:var(--bad);min-height:20px;margin:8px 0 0"></p><button class="btn p lg" id="lb" style="width:100%;margin-top:6px">Sign in</button>' +
-    '</div></div>';
-  function go() {
-    var u = PD.DB.users.find(function (x) { return x.username.toLowerCase() === $('#lu').value.trim().toLowerCase() && x.active !== false; });
-    if (!u || u.pass !== PD.hash($('#lp').value)) { $('#le').textContent = 'Wrong username or password.'; return; }
-    PD.user = u; sessionStorage.setItem('pd_user', u.id); PD.log('Signed in'); if (PD.DB.settings.autoPunch) svc.punchIn(u); PD.save(); shell(); landing(true); setTimeout(PD.shiftEnsure, 250);
-  }
-  $('#lb').onclick = go; $('#lp').addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); }); $('#lu').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#lp').focus(); });
-}
-PD.logout = function (forced) { if (!forced && PD.user && svc.shiftOpen(PD.user.id)) { PD.shiftCloseModal(function () { PD.logout(true); }, true); return; } if (PD.user && PD.DB.settings.autoPunch) svc.punchOut(PD.user); PD.log('Signed out'); PD.save(); sessionStorage.removeItem('pd_user'); PD.user = null; loginScreen(); };
+/* log out: close the shift (counts the drawer), punch out, save, then sign out online */
+PD.logout = function (forced) {
+  if (!forced && PD.user && svc.shiftOpen(PD.user.id)) { PD.shiftCloseModal(function () { PD.logout(true); }, true); return; }
+  if (PD.user && PD.DB.settings.autoPunch) svc.punchOut(PD.user); PD.log('Signed out'); PD.save();
+  sessionStorage.removeItem('pd_in'); document.body.innerHTML = '<div class="login"><div class="card box"><p class="mut">Saving and signing out…</p></div></div>';
+  PD.cloud.saveNow().then(function () { PD.cloud.signOut(); });
+};
 
 /* ---------- shell: classic MDI desktop (menu bar, toolbar, window tabs, docked lists, status bar) ---------- */
 var MENUS = [
   ['File', [
     ['New Sale Bill', 'billing', { fresh: 1 }, 'F2'], ['Attendance (Punch In / Out)', 'attendance'], ['Cash Register && Shifts', 'cashreg'], '-',
     ['Backup && Restore', 'settings', { tab: 'data' }], ['Activity Log', 'settings', { tab: 'log' }], '-',
-    ['Log Out', 'logout'], ['Disconnect this computer', 'disconnect']]],
+    ['Change My Password', 'mypass'], ['Log Out', 'logout']]],
   ['Sale', [
     ['Sales Bill', 'billing', { fresh: 1 }, 'F2'], ['Sales Return', 'salesret'], ['Customer History', 'custhist'], '-',
     ['Sales Register', 'reports', { report: 'sales-reg' }], ['Items Sold', 'reports', { report: 'sales-item' }], ['Sales Tax Report', 'reports', { report: 'sales-tax' }],
@@ -79,7 +74,7 @@ var MENUS = [
   ['Warehouse', [
     ['Stock Request', 'request', null, 'F3'], ['Auto Fill Request (low stock)', 'request', { auto: 1 }], ['Request List', 'reqlist'], '-',
     ['Receive Stock (scan)', 'receive', null, 'F4'], '-',
-    ['Return Stock to Warehouse (scan)', 'whreturn'], ['Warehouse Account (what we owe)', 'accounts', { tab: 'ledger', acc: 'sup_wh' }],
+    ['Return Stock to Warehouse (scan)', 'whreturn'], ['Stock Received from Warehouse (at cost)', 'accounts', { tab: 'ledger', acc: 'ho' }],
     ['Purchase Report', 'reports', { report: 'pur-reg' }]]],
   ['Cash', [
     ['Cash Register && Shifts', 'cashreg'], ['Cash In / Out / Handover (admin)', 'cashreg', { mv: 1 }], ['Close My Shift', 'closeshift']]],
@@ -129,7 +124,7 @@ function act(a) {
   if (!a) return;
   var m;
   if (a === 'palette') return palette();
-  if (a === 'disconnect') return PD.confirm('Disconnect this computer from the online account? You will need the online password to connect again.', 'Disconnect', true).then(function (ok) { if (ok) { PD.logout(true); PD.cloud.signOut(); } });
+  if (a === 'mypass') return PD.changeMyPassword();
   if (a === 'closeshift') return PD.shiftCloseModal(function () { PD.logout(true); }, true);
   if (a === 'closecur') return cur === 'home' ? 0 : closeWin(cur);
   if (a === 'closeall') { wins = []; cur = 'home'; return renderWin(); }
@@ -172,7 +167,7 @@ PD.alertList = function () { try { return typeof PD.alerts === 'function' ? PD.a
 PD.refreshAlerts = function () { try { refreshAlerts(); } catch (e) { console.error('refreshAlerts', e); } };
 function refreshAlerts() { var dw = $('#drw'); if (dw && svc.drawerBalance) dw.textContent = 'Drawer ₹' + PD.n2(svc.drawerBalance()); var n = PD.alertList(), b = $('#bell'); if (b) { var hot = n.filter(function (x) { return x.lvl !== 'info'; }).length; b.textContent = '🔔 ' + n.length; b.className = 'bell' + (hot ? ' hot' : ''); } if (docks.msg) fillDock('msg', ''); }
 function tick() { var c = $('#clk'); if (c) { var d = new Date(); c.textContent = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US'); } }
-var ACTION_RX = /^(dock|toggle|nav|closecur|closeall|closeother|palette|about|home|logout|closeshift|disconnect)/;
+var ACTION_RX = /^(dock|toggle|nav|closecur|closeall|closeother|palette|about|home|logout|closeshift|mypass)/;
 function okItem(it) { if (it === '-' || it[0] === '%wins') return true; if (it[4] === 'direct' && !PD.DB.settings.allowDirect) return false; if (ACTION_RX.test(it[1])) return true; return can(it[1]); }
 function menuItems(i) { var a = MENUS[i][1].map(function (it, n) { return { it: it, n: n }; }).filter(function (x) { return okItem(x.it); }), out = []; a.forEach(function (x) { if (x.it === '-' && (!out.length || out[out.length - 1].it === '-')) return; out.push(x); }); while (out.length && out[out.length - 1].it === '-') out.pop(); return out; }
 function drawMenus() {
@@ -192,7 +187,7 @@ function drawMenus() {
   bar.addEventListener('mouseover', function (e) { var mi = e.target.closest('.mi'); if (mi && openI >= 0 && +mi.dataset.i !== openI) show(+mi.dataset.i); });
   document.addEventListener('mousedown', function (e) { if (!e.target.closest || !e.target.closest('#mbar')) show(-1); });
 }
-function runItem(it) { if (/^(dock|toggle|nav|closecur|closeall|closeother|palette|about|disconnect)/.test(it[1])) act(it[1]); else openWin(it[1], it[2] || null); }
+function runItem(it) { if (/^(dock|toggle|nav|closecur|closeall|closeother|palette|about|mypass)/.test(it[1])) act(it[1]); else openWin(it[1], it[2] || null); }
 /* data changed on another computer or arrived from the warehouse: refresh what is on screen (forms in progress are left alone) */
 PD.onRemote = function () { if (!PD.user || !$('#view')) return; PD.refreshAlerts && PD.refreshAlerts(); if (docks.items) fillDock('items', ''); var w = wins.find(function (x) { return x.key === cur; }); if (!w || /^(reqlist|receive|stock|shelves|dashboard|expiry)$/.test(w.route)) renderWin(); };
 function drawDocks() {

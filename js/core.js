@@ -198,6 +198,7 @@ svc.postPurchase = function (inv) {
   var lines = inv.lines.map(function (l) {
     if (!l.itemId) throw new Error('Select an item on every line');
     if (!(PD.num(l.qty) > 0)) throw new Error('Quantity must be greater than zero (' + svc.itemName(l.itemId) + ')');
+    if (inv.transfer) l = Object.assign({}, l, { tax: 0 });
     var it = svc.item(l.itemId), c = svc.calcPurchaseLine(l);
     taxable += c.taxable; tax += c.taxAmt;
     var line = { itemId: l.itemId, batchNo: (it.batch === false ? 'NA' : (l.batchNo || 'NA')), expiry: it.batch === false ? '' : (l.expiry || ''), qty: PD.num(l.qty), unit: l.unit || 'sale', free: PD.num(l.free), rate: PD.num(l.rate), mrp: PD.num(l.mrp), disc: PD.num(l.disc), tax: PD.num(l.tax), conv: c.conv, qtyS: c.qtyS, freeS: c.freeS, taxable: c.taxable, taxAmt: c.taxAmt, amount: c.amount, cost: PD.r2(c.costPerUnit) };
@@ -207,9 +208,9 @@ svc.postPurchase = function (inv) {
     return line;
   });
   taxable = PD.r2(taxable); tax = PD.r2(tax);
-  var total = PD.r2(taxable + tax), cash = inv.payMode === 'cash';
+  var total = PD.r2(taxable + tax), cash = inv.payMode === 'cash' && !inv.transfer;
   var v = svc.voucher(date, 'Purchase', 'Purchase ' + no + (inv.invNo ? ' / Inv ' + inv.invNo : '') + ' from ' + svc.supName(inv.supplierId), [
-    { acc: 'purchase', dr: taxable }, { acc: 'intax', dr: tax }, cash ? { acc: 'cash', cr: total } : { acc: svc.partyAcc('sup', inv.supplierId), cr: total }
+    { acc: 'purchase', dr: taxable }, { acc: 'intax', dr: tax }, inv.transfer ? { acc: 'ho', cr: total } : cash ? { acc: 'cash', cr: total } : { acc: svc.partyAcc('sup', inv.supplierId), cr: total }
   ], { kind: 'purchase', id: id });
   var rec = { id: id, no: no, invNo: inv.invNo || '', date: date, dueDate: inv.dueDate || '', supplierId: inv.supplierId, payMode: cash ? 'cash' : 'credit', lines: lines, taxable: taxable, tax: tax, total: total, poId: inv.poId || '', dnId: inv.dnId || '', voucherId: v.id, narr: inv.narr || '', user: PD.user ? PD.user.username : '' };
   D().purchases.push(rec);
@@ -224,7 +225,7 @@ svc.postPurchaseReturn = function (r) {
   var lines = r.lines.filter(function (l) { return PD.num(l.qty) > 0; }).map(function (l) {
     var b = svc.batch(l.batchId); if (!b) throw new Error('Batch not found');
     if (b.qty < l.qty) throw new Error('Return qty exceeds stock for ' + svc.itemName(b.itemId) + ' batch ' + b.batchNo);
-    var it = svc.item(b.itemId), t = (it && it.tax) || 0, amt = PD.r2(l.qty * b.rate), tx = PD.r2(amt * t / 100);
+    var it = svc.item(b.itemId), t = r.transfer ? 0 : ((it && it.tax) || 0), amt = PD.r2(l.qty * b.rate), tx = PD.r2(amt * t / 100);
     taxable += amt; tax += tx; b.qty = PD.r2(b.qty - l.qty);
     svc.move({ date: date, itemId: b.itemId, batchId: b.id, type: 'PRET', qty: -l.qty, rate: b.rate, ref: no, refId: id });
     return { itemId: b.itemId, batchId: b.id, batchNo: b.batchNo, expiry: b.expiry, qty: PD.num(l.qty), rate: b.rate, tax: t, taxable: amt, taxAmt: tx };
@@ -232,7 +233,7 @@ svc.postPurchaseReturn = function (r) {
   if (!lines.length) throw new Error('Enter a return quantity');
   taxable = PD.r2(taxable); tax = PD.r2(tax);
   var v = svc.voucher(date, 'Purchase Return', 'Purchase return ' + no + ' to ' + svc.supName(r.supplierId), [
-    { acc: svc.partyAcc('sup', r.supplierId), dr: taxable + tax }, { acc: 'purret', cr: taxable }, { acc: 'intax', cr: tax }
+    { acc: r.transfer ? 'ho' : svc.partyAcc('sup', r.supplierId), dr: taxable + tax }, { acc: 'purret', cr: taxable }, { acc: 'intax', cr: tax }
   ], { kind: 'preturn', id: id });
   var rec = { id: id, no: no, date: date, supplierId: r.supplierId, lines: lines, taxable: taxable, tax: tax, total: PD.r2(taxable + tax), voucherId: v.id, reason: r.reason || '' };
   D().preturns.push(rec); PD.log('Purchase return ' + no, svc.supName(r.supplierId)); PD.save();
@@ -339,7 +340,7 @@ svc.postSaleReturn = function (r) {
     var b = svc.batch(l.batchId);
     if (b) b.qty = PD.r2(b.qty + q);
     svc.move({ date: date, itemId: l.itemId, batchId: l.batchId, type: 'SRET', qty: q, rate: l.rate, ref: no, refId: id });
-    lines.push({ idx: rl.idx, itemId: l.itemId, name: l.name, batchNo: l.batchNo, qty: q, amount: amt });
+    lines.push({ idx: rl.idx, itemId: l.itemId, name: l.name, batchNo: l.batchNo, qty: q, amount: amt, cost: l.cost || 0 });
   });
   if (!lines.length) throw new Error('Enter a return quantity');
   taxable = PD.r2(taxable); tax = PD.r2(tax);
@@ -467,6 +468,7 @@ svc.balanceSheet = function (yearId) {
   liabs.push(['Sundry Creditors (Payables)', PD.r2(cred)]); L += cred;
   liabs.push(['Output GST', -net('outtax')]); L += -net('outtax');
   liabs.push(['Capital Account', -net('capital')]); L += -net('capital');
+  if (net('ho')) { liabs.push(['Head Office (stock from warehouse)', -net('ho')]); L += -net('ho'); }
   liabs.push(['Net Profit for the year', P.net]); L += P.net;
   return { assets: assets, liabs: liabs, A: PD.r2(A), L: PD.r2(L), P: P };
 };

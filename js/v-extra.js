@@ -26,7 +26,6 @@ PD.alerts = function () {
   if (can('accounts')) {
     var rec = 0; D.customers.forEach(function (c) { var b = svc.partyBalance('cus', c.id); if (b > 0) rec += b; });
     if (rec > 0) out.push({ lvl: 'info', text: 'Customers owe ₹' + PD.n2(rec) + ' (credit sales)', go: ['reports', { report: 'recv' }], icon: 'report' });
-    var pay = svc.partyBalance('sup', 'wh'); if (pay > 0) out.push({ lvl: 'info', text: 'Payable to warehouse: ₹' + PD.n2(pay), go: ['accounts', { tab: 'ledger', acc: 'sup_wh' }], icon: 'book' });
   }
   if (PD.user && PD.user.role === 'Admin') {
     var old = D.shifts.filter(function (s) { return s.status === 'open' && s.date < PD.today(); }); if (old.length) out.push({ lvl: 'warn', text: old.length + ' shift(s) from earlier days were never closed (' + old.map(function (s) { return s.name; }).join(', ') + ')', go: ['cashreg'], icon: 'alert' });
