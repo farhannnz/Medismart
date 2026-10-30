@@ -74,7 +74,7 @@ var MENUS = [
   ['Warehouse', [
     ['Stock Request', 'request', null, 'F3'], ['Auto Fill Request (low stock)', 'request', { auto: 1 }], ['Request List', 'reqlist'], '-',
     ['Receive Stock (scan)', 'receive', null, 'F4'], '-',
-    ['Return Stock to Warehouse (scan)', 'whreturn'], ['Stock Received from Warehouse (at cost)', 'accounts', { tab: 'ledger', acc: 'ho' }],
+    ['Return Stock to Warehouse (scan)', 'whreturn'], ['Warehouse Account (bills && payments)', 'accounts', { tab: 'ledger', acc: 'sup_wh' }], ['Old Transfers from Warehouse (at cost)', 'accounts', { tab: 'ledger', acc: 'ho' }],
     ['Purchase Report', 'reports', { report: 'pur-reg' }]]],
   ['Cash', [
     ['Cash Register && Shifts', 'cashreg'], ['Cash In / Out / Handover (admin)', 'cashreg', { mv: 1 }], ['Close My Shift', 'closeshift']]],

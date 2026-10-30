@@ -198,7 +198,7 @@ svc.postPurchase = function (inv) {
   var lines = inv.lines.map(function (l) {
     if (!l.itemId) throw new Error('Select an item on every line');
     if (!(PD.num(l.qty) > 0)) throw new Error('Quantity must be greater than zero (' + svc.itemName(l.itemId) + ')');
-    if (inv.transfer) l = Object.assign({}, l, { tax: 0 });
+    if (inv.transfer || inv.noTax) l = Object.assign({}, l, { tax: 0 });
     var it = svc.item(l.itemId), c = svc.calcPurchaseLine(l);
     taxable += c.taxable; tax += c.taxAmt;
     var line = { itemId: l.itemId, batchNo: (it.batch === false ? 'NA' : (l.batchNo || 'NA')), expiry: it.batch === false ? '' : (l.expiry || ''), qty: PD.num(l.qty), unit: l.unit || 'sale', free: PD.num(l.free), rate: PD.num(l.rate), mrp: PD.num(l.mrp), disc: PD.num(l.disc), tax: PD.num(l.tax), conv: c.conv, qtyS: c.qtyS, freeS: c.freeS, taxable: c.taxable, taxAmt: c.taxAmt, amount: c.amount, cost: PD.r2(c.costPerUnit) };
@@ -225,7 +225,7 @@ svc.postPurchaseReturn = function (r) {
   var lines = r.lines.filter(function (l) { return PD.num(l.qty) > 0; }).map(function (l) {
     var b = svc.batch(l.batchId); if (!b) throw new Error('Batch not found');
     if (b.qty < l.qty) throw new Error('Return qty exceeds stock for ' + svc.itemName(b.itemId) + ' batch ' + b.batchNo);
-    var it = svc.item(b.itemId), t = r.transfer ? 0 : ((it && it.tax) || 0), amt = PD.r2(l.qty * b.rate), tx = PD.r2(amt * t / 100);
+    var it = svc.item(b.itemId), t = (r.transfer || r.noTax) ? 0 : ((it && it.tax) || 0), amt = PD.r2(l.qty * b.rate), tx = PD.r2(amt * t / 100);
     taxable += amt; tax += tx; b.qty = PD.r2(b.qty - l.qty);
     svc.move({ date: date, itemId: b.itemId, batchId: b.id, type: 'PRET', qty: -l.qty, rate: b.rate, ref: no, refId: id });
     return { itemId: b.itemId, batchId: b.id, batchNo: b.batchNo, expiry: b.expiry, qty: PD.num(l.qty), rate: b.rate, tax: t, taxable: amt, taxAmt: tx };
@@ -306,7 +306,7 @@ svc.postSale = function (bill) {
       var it = svc.item(l.itemId), b = svc.batch(l.batchId), c = calcLine(calc, ls, i);
       b.qty = PD.r2(b.qty - PD.num(l.qty)); cost += PD.num(l.qty) * (b.rate || 0);
       svc.move({ date: date, itemId: l.itemId, batchId: b.id, type: 'SALE', qty: -PD.num(l.qty), rate: l.rate, ref: no, refId: id });
-      return { itemId: l.itemId, name: it.name, generic: it.generic, schedule: it.schedule || '', batchId: b.id, batchNo: b.batchNo, expiry: b.expiry, qty: PD.num(l.qty), rate: PD.num(l.rate), disc: PD.num(l.disc), tax: it.tax || 0, amount: c.fin, taxAmt: c.tax, taxable: c.taxable, cost: PD.r2(b.rate || 0) };
+      return { itemId: l.itemId, name: it.name, generic: it.generic, schedule: it.schedule || '', rack: it.rack || '', batchId: b.id, batchNo: b.batchNo, expiry: b.expiry, qty: PD.num(l.qty), rate: PD.num(l.rate), disc: PD.num(l.disc), tax: it.tax || 0, amount: c.fin, taxAmt: c.tax, taxable: c.taxable, cost: PD.r2(b.rate || 0) };
     });
     var payAcc = mode === 'cash' ? 'cash' : 'bank';
     var vl = [{ acc: payAcc, dr: paid }, { acc: 'sales', cr: calc.taxable }, { acc: 'outtax', cr: calc.tax }];
@@ -514,7 +514,9 @@ svc.removeMaster = function (coll, id) {
 svc.partyBalance = function (kind, id) {
   var acc = (kind === 'sup' ? 'sup_' : 'cus_') + id, dr = 0, cr = 0;
   D().vouchers.forEach(function (v) { v.lines.forEach(function (l) { if (l.acc === acc) { dr += l.dr; cr += l.cr; } }); });
-  Object.keys(D().openBal).forEach(function (y) { var n = D().openBal[y][acc]; if (n) { if (n > 0) dr += n; else cr += -n; } });
+  /* only the first year's opening balance: later years' openings are carried forward from vouchers already counted above */
+  var y0 = D().years.slice().sort(function (a, b) { return a.start.localeCompare(b.start); })[0], n = y0 && D().openBal[y0.id] ? D().openBal[y0.id][acc] : 0;
+  if (n) { if (n > 0) dr += n; else cr += -n; }
   return PD.r2(kind === 'sup' ? cr - dr : dr - cr);
 };
 })();

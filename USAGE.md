@@ -30,9 +30,10 @@ File • Sale • Stock • Warehouse • Cash • Accounts • Tools • View �
 ## Files
 Har strip par warehouse ka **barcode label** (Code 128, strip ka code jaise `L12-045`). Shop me scan karne par code dispatch file se pehchana jaata hai. Quantities sale unit (strip) me.
 - **Request** (shop→warehouse): `{ "type":"request", "shop":"<shop>", "no":"RQ-000001", "date":"YYYY-MM-DD", "note":"", "lines":[{ "name":"<item>", "qty":2, "unit":"purchase|sale" }] }`
-- **Dispatch** (warehouse→shop): `{ "type":"dispatch", "v":2, "warehouse":"", "no":"WD-000001", "date":"", "requestNo":"RQ-000001", "by":"", "note":"", "lines":[{ "name":"", "generic":"", "cat":"", "schedule":"", "mfr":"", "unit":"Strip", "punit":"Box", "conv":10, "hsn":"", "tax":12, "batchNo":"", "expiry":"YYYY-MM", "mrp":0, "rate":0, "qty":0, "serials":["L12-001"] }] }` (naya item apne aap bann jaata hai)
+- **Dispatch** (warehouse→shop): `{ "type":"dispatch", "v":3, "bill":true, "warehouse":"", "no":"WD-000001", "date":"", "requestNo":"RQ-000001", "by":"", "note":"", "lines":[{ "name":"", "generic":"", "cat":"", "schedule":"", "mfr":"", "unit":"Strip", "punit":"Box", "conv":10, "hsn":"", "tax":12, "batchNo":"", "expiry":"YYYY-MM", "mrp":0, "rate":0, "qty":0, "serials":["L12-001"] }] }` (naya item apne aap bann jaata hai)
 - **Return** (shop→warehouse): `{ "type":"return", "v":2, "shop":"", "no":"WR-000001", "date":"", "note":"", "lines":[{ "name":"", "batchNo":"", "expiry":"", "mrp":0, "rate":0, "qty":0, "reason":"Expired", "note":"", "serials":["L12-001"] }] }`
 - **Item list** (warehouse→shop): `{ "type":"items", "items":[{ "name":"", "generic":"", "cat":"", "schedule":"", "mfr":"", "tax":12, "mrp":0, "unit":"Strip", "punit":"Box", "conv":10, "reorder":10 }] }`
+- `bill: true` = warehouse ka bill (warehouse ke shop price par, GST nahi): Receive karte hi warehouse ka **udhaar** (supplier account) chadhta hai; payment Accounts → Make payment se. Return lines me `credit: true` = billed maal, udhaar kam hota hai. Purane dispatch (bina bill) Head Office me jaate hain.
 - Demo (warehouse software ke bina): Request List → pending request → "Demo: simulate warehouse dispatch".
 
 ## Shortcuts
