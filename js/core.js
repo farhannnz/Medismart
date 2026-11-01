@@ -288,6 +288,30 @@ svc.postSale = function (bill) {
     var key = svc.seriesOf(it); if (!groups[key]) { groups[key] = []; order.push(key); }
     groups[key].push(l);
   });
+  /* guards: expired batch, selling above MRP, discount limit for non-admins, H1 / X details, credit limit for non-admins */
+  var admin = !!(PD.user && PD.user.role === 'Admin'), maxD = PD.num(S.maxDisc), sumNet0 = 0, needRx = false;
+  bill.lines.forEach(function (l) { sumNet0 += PD.num(l.qty) * PD.num(l.rate) * (1 - PD.num(l.disc) / 100); });
+  var billPct = PD.num(bill.discPct) > 0 ? PD.num(bill.discPct) : (sumNet0 > 0 ? Math.min(PD.num(bill.discAmt), sumNet0) / sumNet0 * 100 : 0);
+  bill.lines.forEach(function (l) {
+    var it = svc.item(l.itemId), b = svc.batch(l.batchId), mrp = PD.num(b.mrp) || PD.num(it.mrp);
+    if (b.expiry && PD.daysToExp(b.expiry) < 0) throw new Error(it.name + ' batch ' + b.batchNo + ' expired in ' + PD.fmtExp(b.expiry) + ' and cannot be sold');
+    if (!S.allowAboveMrp && mrp > 0 && PD.num(l.rate) > mrp + 0.005) throw new Error(it.name + ': rate ' + PD.n2(l.rate) + ' is above the MRP ' + PD.n2(mrp) + '. Selling above MRP is not allowed.');
+    if (maxD > 0 && !admin && mrp > 0) { var eff = (1 - PD.num(l.rate) * (1 - PD.num(l.disc) / 100) * (1 - billPct / 100) / mrp) * 100; if (eff > maxD + 0.05) throw new Error(it.name + ': discount ' + eff.toFixed(1) + '% is more than the allowed ' + maxD + '%. Ask the admin to bill it.'); }
+    if (it.schedule === 'H1' || it.schedule === 'X') needRx = true;
+  });
+  if (needRx) {
+    if (!String(bill.doctor || '').trim()) throw new Error('Doctor name is required for Schedule H1 / X medicines');
+    if (!String(bill.doctorReg || '').trim()) throw new Error('Doctor registration number is required for Schedule H1 / X medicines');
+    if (!bill.customerId) throw new Error('Choose the patient (customer) for Schedule H1 / X medicines');
+    if (!String(bill.patientAddr || '').trim()) throw new Error('Patient address is required for Schedule H1 / X medicines');
+  }
+  if ((bill.payMode || 'cash') === 'credit' && bill.customerId && !admin) {
+    var cu = svc.customer(bill.customerId);
+    if (cu && cu.type !== 'Special' && PD.num(cu.limit) > 0) {
+      var est = svc.calcBill(bill.lines.map(function (l) { return { qty: l.qty, rate: l.rate, disc: l.disc, tax: svc.item(l.itemId).tax || 0 }; }), bill.discPct, bill.discAmt).total, owe = svc.partyBalance('cus', cu.id) + Math.max(0, (S.rounding ? Math.round(est) : est) - PD.num(bill.received));
+      if (owe > PD.num(cu.limit) + 0.005) throw new Error('Credit limit of ' + PD.n2(cu.limit) + ' would be exceeded for ' + cu.name + ' (outstanding ' + PD.n2(owe) + '). Ask the admin.');
+    }
+  }
   /* stock check across the whole bill first */
   var need = {}; bill.lines.forEach(function (l) { need[l.batchId] = (need[l.batchId] || 0) + PD.num(l.qty); });
   for (var bid in need) { var bb = svc.batch(bid); if (bb.qty + 1e-9 < need[bid]) throw new Error('Only ' + PD.qty(bb.qty) + ' in stock for ' + svc.itemName(bb.itemId) + ' (batch ' + bb.batchNo + ')'); }
@@ -313,17 +337,19 @@ svc.postSale = function (bill) {
     if (due > 0) vl.push({ acc: svc.partyAcc('cus', bill.customerId), dr: due });
     if (ro !== 0) vl.push(ro > 0 ? { acc: 'roundoff', cr: ro } : { acc: 'roundoff', dr: -ro });
     var v = svc.voucher(date, 'Sales', 'Sale ' + no, vl, { kind: 'sale', id: id });
-    var rec = { id: id, series: series, no: no, date: date, time: PD.nowTime(), customerId: bill.customerId || '', doctor: bill.doctor || '', payMode: mode, lines: lines, gross: calc.gross, disc: calc.disc, taxable: calc.taxable, tax: calc.tax, roundoff: ro, total: grand, paid: paid, due: due, profit: PD.r2(calc.taxable - cost), voucherId: v.id, user: PD.user ? PD.user.username : '' };
+    var rec = { id: id, series: series, no: no, date: date, time: PD.nowTime(), customerId: bill.customerId || '', doctor: bill.doctor || '', patientAddr: bill.patientAddr || '', doctorReg: bill.doctorReg || '', payMode: mode, lines: lines, gross: calc.gross, disc: calc.disc, taxable: calc.taxable, tax: calc.tax, roundoff: ro, total: grand, paid: paid, due: due, profit: PD.r2(calc.taxable - cost), voucherId: v.id, user: PD.user ? PD.user.username : '' };
     D().sales.push(rec); out.push(rec);
   });
-  if (bill.doctor && bill.doctor.trim()) svc.rememberDoctor(bill.doctor.trim());
+  if (bill.doctor && bill.doctor.trim()) svc.rememberDoctor(bill.doctor.trim(), bill.doctorReg);
+  if (bill.customerId && bill.patientAddr) { var pc = svc.customer(bill.customerId); if (pc && !pc.address) pc.address = bill.patientAddr; }
   PD.log('Sale ' + out.map(function (b) { return b.no; }).join(', '), String(out.reduce(function (a, b) { return a + b.total; }, 0)));
   PD.save();
   return out;
 };
 function calcLine(calc, ls, i) { return calc._lines[i]; }
-svc.rememberDoctor = function (name) {
-  if (!D().doctors.some(function (d) { return d.name.toLowerCase() === name.toLowerCase(); })) D().doctors.push({ id: PD.uid('d'), name: name, regNo: '', phone: '' });
+svc.rememberDoctor = function (name, reg) {
+  var d = D().doctors.find(function (x) { return x.name.toLowerCase() === name.toLowerCase(); });
+  if (!d) D().doctors.push({ id: PD.uid('d'), name: name, regNo: reg || '', phone: '' }); else if (reg && !d.regNo) d.regNo = reg;
 };
 svc.postSaleReturn = function (r) {
   var bill = D().sales.find(function (s) { return s.id === r.billId; });
@@ -351,6 +377,21 @@ svc.postSaleReturn = function (r) {
   var rec = { id: id, no: no, date: date, time: PD.nowTime(), user: PD.user ? PD.user.username : '', cash: !toCustomer && (bill.payMode === 'cash' || bill.payMode === 'credit'), billId: bill.id, billNo: bill.no, customerId: bill.customerId, lines: lines, taxable: taxable, tax: tax, total: total, voucherId: v.id, reason: r.reason || '' };
   D().sreturns.push(rec); PD.log('Sales return ' + no, bill.no); PD.save();
   return rec;
+};
+
+/* cancel a saved bill (Admin): stock goes back, the books get a reversing voucher, the bill moves to cancelledSales */
+svc.cancelSale = function (id, reason) {
+  if (!(PD.user && PD.user.role === 'Admin')) throw new Error('Only an Admin can cancel a saved bill');
+  reason = String(reason || '').trim(); if (!reason) throw new Error('Give a reason for cancelling');
+  var s = D().sales.find(function (x) { return x.id === id; }); if (!s) throw new Error('Bill not found');
+  if (D().sreturns.some(function (r) { return r.billId === id; })) throw new Error('Returns were made against this bill, so it cannot be cancelled');
+  var ov = D().vouchers.find(function (v) { return v.id === s.voucherId; });
+  var rv = ov ? svc.voucher(s.date, 'Sales Cancel', 'Cancelled bill ' + s.no + ': ' + reason, ov.lines.map(function (l) { return { acc: l.acc, dr: l.cr, cr: l.dr }; }), { kind: 'salecancel', id: s.id }) : null;
+  s.lines.forEach(function (l) { var b = svc.batch(l.batchId); if (b) b.qty = PD.r2(b.qty + PD.num(l.qty)); });
+  D().moves = D().moves.filter(function (m) { return m.refId !== s.id; });
+  D().sales = D().sales.filter(function (x) { return x.id !== id; });
+  (D().cancelledSales = D().cancelledSales || []).push(Object.assign({}, s, { cancelled: { on: PD.today(), time: PD.nowTime(), by: PD.user.username, reason: reason, vch: rv ? rv.id : '' } }));
+  PD.log('Bill cancelled ' + s.no, reason); PD.save(); return s;
 };
 
 /* ---------- damage / expiry / claims ---------- */
