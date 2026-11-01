@@ -87,11 +87,11 @@ svc.importDispatch = function (f) {
     var it = findItem(l.name); if (!it) it = svc.upsertItem(Object.assign({ mrp: l.mrp, tax: l.tax }, l)).item;
     else if (PD.num(l.per) >= 1 && it.conv !== PD.num(l.per)) { var w = svc.fromWarehouse(l); it.unit = w.unit; it.punit = w.punit; it.conv = w.conv; }
     var per = PD.num(l.per) >= 1 ? PD.num(l.per) : 1;
-    return { itemId: it.id, reqIdx: l.reqIdx, batchNo: l.batchNo || 'NA', expiry: l.expiry || '', mrp: PD.num(l.mrp) ? PD.r2(PD.num(l.mrp) / per) : it.mrp, rate: PD.r2(PD.num(l.rate) / per), qty: PD.num(l.qty) * per, per: per, strips: PD.num(l.qty), tax: f.bill ? 0 : (l.tax != null ? PD.num(l.tax) : (it.tax || 0)), serials: Array.isArray(l.serials) ? l.serials : [] };
+    return { itemId: it.id, reqIdx: l.reqIdx, batchNo: l.batchNo || 'NA', expiry: l.expiry || '', mrp: PD.num(l.mrp) ? PD.r2(PD.num(l.mrp) / per) : it.mrp, rate: PD.r2(PD.num(l.rate) / per), qty: PD.num(l.qty) * per, per: per, strips: PD.num(l.qty), tax: f.bill && !f.gst ? 0 : (l.tax != null ? PD.num(l.tax) : (it.tax || 0)), serials: Array.isArray(l.serials) ? l.serials : [] };
   });
   if (!lines.length) throw new Error('The dispatch file has no items');
   var r = D().requests.find(function (x) { return x.no === f.requestNo; });
-  var d = { id: PD.uid('dc'), no: f.no, date: f.date || PD.today(), requestId: r ? r.id : '', requestNo: f.requestNo || '', lines: lines, status: 'In transit', by: f.by || f.warehouse || 'Warehouse', note: f.note || '', external: true, bill: !!f.bill };
+  var d = { id: PD.uid('dc'), no: f.no, date: f.date || PD.today(), requestId: r ? r.id : '', requestNo: f.requestNo || '', lines: lines, status: 'In transit', by: f.by || f.warehouse || 'Warehouse', note: f.note || '', external: true, bill: !!f.bill, gst: !!(f.bill && f.gst) };
   var v = svc.dispatchValue(d); d.taxable = v.taxable; d.tax = v.tax; d.total = v.total;
   D().dispatches.push(d); if (r) { r.dispatchId = d.id; r.status = 'Approved'; r.decision = { by: d.by, date: d.date, note: d.note }; }
   PD.log('Dispatch imported ' + d.no, d.requestNo); PD.save(); return d;
@@ -125,7 +125,8 @@ svc.receiveDispatch = function (id, recv, opts) {
     place[l.itemId] = sh;
   });
   Object.keys(place).forEach(function (id) { svc.item(id).rack = place[id]; });
-  var inv = svc.postPurchase({ supplierId: svc.warehouse().id, invNo: d.no, date: PD.today(), transfer: !d.bill, noTax: !!d.bill, lines: lines });
+  var inv = svc.postPurchase({ supplierId: svc.warehouse().id, invNo: d.no, date: PD.today(), transfer: !d.bill, noTax: !!d.bill && !d.gst, lines: lines });
+  if (d.gst) inv.whGst = true;   /* the warehouse charged GST on this bill: input GST is booked and returns give it back */
   if (d.bill) inv.whBill = true;   /* billed by the warehouse: payable, and returning this stock reduces it */
   d.status = short.length ? 'Received (short)' : 'Received'; d.invId = inv.id; d.receivedOn = PD.today(); d.receivedBy = PD.user ? PD.user.name : ''; d.short = short;
   var r = D().requests.find(function (x) { return x.id === d.requestId; }); if (r) r.status = short.length ? 'Received (short)' : 'Received';
@@ -170,11 +171,14 @@ svc.sendReturn = function (o) {
   if (!lines.length) throw new Error('Scan or add at least one strip to return');
   lines.forEach(function (l) { var b = svc.batch(l.batchId); if (!b) throw new Error('A batch is missing'); if (!l.reason) throw new Error('Choose a reason for ' + svc.itemName(b.itemId)); if (PD.num(l.qty) > b.qty + 1e-9) throw new Error('Only ' + PD.qty(b.qty) + ' of ' + svc.itemName(b.itemId) + ' (batch ' + b.batchNo + ') is in your shop'); });
   /* stock that came on a warehouse BILL reduces what we owe; older transferred stock goes back to Head Office */
-  function billed(batchId) { var b = svc.batch(batchId), p = b && b.purId ? D().purchases.find(function (x) { return x.id === b.purId; }) : null; return !!(p && p.whBill); }
-  var out = lines.map(function (l) { var b = svc.batch(l.batchId), it = svc.item(b.itemId); return { itemId: it.id, name: it.name, batchNo: b.batchNo, expiry: b.expiry, mrp: b.mrp, rate: b.rate, qty: PD.num(l.qty), reason: l.reason, note: l.note || '', serials: l.serials || [], credit: billed(l.batchId) }; });
-  var prs = [true, false].map(function (cr) {
-    var ls = lines.filter(function (l) { return billed(l.batchId) === cr; }); if (!ls.length) return null;
-    return svc.postPurchaseReturn({ supplierId: svc.warehouse().id, transfer: !cr, noTax: cr, lines: ls.map(function (l) { return { batchId: l.batchId, qty: PD.num(l.qty) }; }), reason: 'Returned to warehouse' });
+  function purOf(batchId) { var b = svc.batch(batchId); return b && b.purId ? D().purchases.find(function (x) { return x.id === b.purId; }) : null; }
+  function billed(batchId) { var p = purOf(batchId); return !!(p && p.whBill); }
+  /* GST % the warehouse charged on this batch (null = stock came on a bill without GST) */
+  function gstTax(batchId) { var p = purOf(batchId); if (!(p && p.whGst)) return null; var pl = p.lines.find(function (x) { return x.batchId === batchId; }); return pl ? PD.num(pl.tax) : null; }
+  var out = lines.map(function (l) { var b = svc.batch(l.batchId), it = svc.item(b.itemId); return { itemId: it.id, name: it.name, batchNo: b.batchNo, expiry: b.expiry, mrp: b.mrp, rate: b.rate, qty: PD.num(l.qty), reason: l.reason, note: l.note || '', serials: l.serials || [], credit: billed(l.batchId), gst: gstTax(l.batchId) != null, tax: gstTax(l.batchId) || 0 }; });
+  var prs = ['g', 'b', 't'].map(function (g) {   /* g = billed with GST, b = billed without GST, t = old transferred stock */
+    var ls = lines.filter(function (l) { return (gstTax(l.batchId) != null ? 'g' : billed(l.batchId) ? 'b' : 't') === g; }); if (!ls.length) return null;
+    return svc.postPurchaseReturn({ supplierId: svc.warehouse().id, transfer: g === 't', noTax: g === 'b', lines: ls.map(function (l) { return { batchId: l.batchId, qty: PD.num(l.qty), tax: g === 'g' ? gstTax(l.batchId) : undefined }; }), reason: 'Returned to warehouse' });
   }).filter(Boolean);
   var pr = { id: prs[0].id, total: PD.r2(prs.reduce(function (a, x) { return a + x.total; }, 0)) };
   var rec = { id: PD.uid('wr'), no: svc.docNo('WR-', 'WRET'), date: PD.today(), time: PD.nowTime(), by: PD.user ? PD.user.name : '', note: o.note || '', lines: out, status: 'Sent', value: pr.total, prId: pr.id, prIds: prs.map(function (x) { return x.id; }) };
@@ -185,7 +189,7 @@ svc.sendReturn = function (o) {
 svc.returnFile = function (r) {
   return { type: 'return', v: 2, shop: D().shop.name, no: r.no, date: r.date, note: r.note, lines: r.lines.map(function (l) {
     var it = svc.item(l.itemId), per = it && it.punit === 'Strip' && it.conv > 1 ? it.conv : 1;
-    return { name: l.name, batchNo: l.batchNo, expiry: l.expiry, mrp: PD.r2(l.mrp * per), rate: PD.r2(l.rate * per), qty: PD.r2(l.qty / per), tabs: l.qty, reason: l.reason, note: l.note, serials: l.serials, credit: !!l.credit };
+    return { name: l.name, batchNo: l.batchNo, expiry: l.expiry, mrp: PD.r2(l.mrp * per), rate: PD.r2(l.rate * per), qty: PD.r2(l.qty / per), tabs: l.qty, reason: l.reason, note: l.note, serials: l.serials, credit: !!l.credit, gst: !!l.gst, tax: l.tax || 0 };
   }) };
 };
 

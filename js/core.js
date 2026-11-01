@@ -225,7 +225,7 @@ svc.postPurchaseReturn = function (r) {
   var lines = r.lines.filter(function (l) { return PD.num(l.qty) > 0; }).map(function (l) {
     var b = svc.batch(l.batchId); if (!b) throw new Error('Batch not found');
     if (b.qty < l.qty) throw new Error('Return qty exceeds stock for ' + svc.itemName(b.itemId) + ' batch ' + b.batchNo);
-    var it = svc.item(b.itemId), t = (r.transfer || r.noTax) ? 0 : ((it && it.tax) || 0), amt = PD.r2(l.qty * b.rate), tx = PD.r2(amt * t / 100);
+    var it = svc.item(b.itemId), t = (r.transfer || r.noTax) ? 0 : (l.tax != null ? PD.num(l.tax) : ((it && it.tax) || 0)), amt = PD.r2(l.qty * b.rate), tx = PD.r2(amt * t / 100);
     taxable += amt; tax += tx; b.qty = PD.r2(b.qty - l.qty);
     svc.move({ date: date, itemId: b.itemId, batchId: b.id, type: 'PRET', qty: -l.qty, rate: b.rate, ref: no, refId: id });
     return { itemId: b.itemId, batchId: b.id, batchNo: b.batchNo, expiry: b.expiry, qty: PD.num(l.qty), rate: b.rate, tax: t, taxable: amt, taxAmt: tx };
