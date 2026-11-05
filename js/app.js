@@ -6,7 +6,7 @@ var PD = window.PD, esc = PD.esc, svc = PD.svc, $ = PD.$, $$ = PD.$$;
 var NAV = [
   ['Overview', [['dashboard', 'Dashboard', 'dash', 'F1']]],
   ['Sales', [['billing', 'Sales Bill', 'bill', 'F2'], ['salesret', 'Sales Return', 'ret', ''], ['custhist', 'Customer History', 'users', ''], ['nodisc', 'Discount-Exempt Medicines', 'bill', '']]],
-  ['Warehouse', [['request', 'Stock Request', 'order', 'F3'], ['reqlist', 'Request List', 'order', ''], ['receive', 'Receive Stock', 'cart', 'F4']]],
+  ['Warehouse', [['request', 'Stock Request', 'order', 'F3'], ['reqlist', 'Request List', 'order', ''], ['autoprop', 'Auto Returns & Requests (approve)', 'order', ''], ['receive', 'Receive Stock', 'cart', 'F4']]],
   ['Stock', [['stock', 'Current Stock', 'box', 'F5'], ['shelves', 'Shelves', 'box', ''], ['expiry', 'Expiry Watch', 'clock', ''], ['expclaim', 'Return Expired Stock', 'clock', '']]],
   ['Insights', [['reports', 'Reports', 'report', 'F7'], ['accounts', 'Accounts', 'book', 'F8']]],
   ['Setup', [['attendance', 'Attendance', 'users', ''], ['settings', 'Settings & Staff', 'gear', '']]]
@@ -72,7 +72,7 @@ var MENUS = [
     ['Expiry Watch', 'expiry', { tab: 'watch' }], ['Return Stock to Warehouse (scan)', 'whreturn'], '-',
     ['Reorder List', 'reports', { report: 'reorder' }], ['Fast && Slow Moving', 'reports', { report: 'moving' }]]],
   ['Warehouse', [
-    ['Stock Request', 'request', null, 'F3'], ['Auto Fill Request (low stock)', 'request', { auto: 1 }], ['Request List', 'reqlist'], '-',
+    ['Stock Request', 'request', null, 'F3'], ['Auto Fill Request (low stock)', 'request', { auto: 1 }], ['Request List', 'reqlist'], ['Auto Returns && Requests (approve)', 'autoprop'], '-',
     ['Receive Stock (scan)', 'receive', null, 'F4'], '-',
     ['Return Stock to Warehouse (scan)', 'whreturn'], ['Warehouse Account (bills && payments)', 'accounts', { tab: 'ledger', acc: 'sup_wh' }], ['Old Transfers from Warehouse (at cost)', 'accounts', { tab: 'ledger', acc: 'ho' }],
     ['Purchase Report', 'reports', { report: 'pur-reg' }]]],
@@ -95,7 +95,7 @@ var TOOLS = [
   ['Settings', 'gear', 'settings', '#666'], ['Log out', 'lock', 'logout', '#7a8a2e']
 ];
 var TITLES = {}; NAV.forEach(function (g) { g[1].forEach(function (i) { TITLES[i[0]] = i[1]; }); }); TITLES.home = 'Medismart'; TITLES.shelves = 'Shelves'; TITLES.whreturn = 'Return to Warehouse'; TITLES.cashreg = 'Cash Register'; TITLES.itemsimport = 'Import Item List'; TITLES.dnote = 'Delivery Note'; TITLES.batchedit = 'Batch Edit'; TITLES.expclaim = 'ExpiryClaim'; TITLES.itemdlg = 'Item'; TITLES.acctdlg = 'Account Details'; TITLES.request = 'Stock Request'; TITLES.reqlist = 'Request List'; TITLES.receive = 'Receive Stock'; TITLES.attendance = 'Attendance'; TITLES.custhist = 'Customer History';
-var RIGHT = { dnote: 'orders', batchedit: 'stock', expclaim: 'expiry', itemdlg: 'masters', acctdlg: 'accounts', shelves: 'stock', itemsimport: 'requests', whreturn: 'requests', cashreg: 'attendance', request: 'requests', reqlist: 'requests', receive: 'requests', custhist: 'billing', nodisc: 'masters' };
+var RIGHT = { dnote: 'orders', batchedit: 'stock', expclaim: 'expiry', itemdlg: 'masters', acctdlg: 'accounts', shelves: 'stock', itemsimport: 'requests', whreturn: 'requests', cashreg: 'attendance', request: 'requests', reqlist: 'requests', receive: 'requests', custhist: 'billing', nodisc: 'masters', autoprop: 'requests' };
 var wins = [], cur = 'home', docks = { items: false, mfrs: false, sups: false, msg: true }, ui = { toolbar: true, status: true };
 PD.go = function (route, arg) { openWin(route, arg); };
 
@@ -165,7 +165,7 @@ function landing(fresh) {
 /* alerts never block billing: a missing or failing alerts check just shows none */
 PD.alertList = function () { try { return typeof PD.alerts === 'function' ? PD.alerts() || [] : []; } catch (e) { console.error('alerts', e); return []; } };
 PD.refreshAlerts = function () { try { refreshAlerts(); } catch (e) { console.error('refreshAlerts', e); } };
-function refreshAlerts() { var dw = $('#drw'); if (dw && svc.drawerBalance) dw.textContent = 'Drawer ₹' + PD.n2(svc.drawerBalance()); var n = PD.alertList(), b = $('#bell'); if (b) { var hot = n.filter(function (x) { return x.lvl !== 'info'; }).length; b.textContent = '🔔 ' + n.length; b.className = 'bell' + (hot ? ' hot' : ''); } if (docks.msg) fillDock('msg', ''); }
+function refreshAlerts() { try { if (svc.autoScan) svc.autoScan(); } catch (e) { console.error('autoScan', e); } var dw = $('#drw'); if (dw && svc.drawerBalance) dw.textContent = 'Drawer ₹' + PD.n2(svc.drawerBalance()); var n = PD.alertList(), b = $('#bell'); if (b) { var hot = n.filter(function (x) { return x.lvl !== 'info'; }).length; b.textContent = '🔔 ' + n.length; b.className = 'bell' + (hot ? ' hot' : ''); } if (docks.msg) fillDock('msg', ''); }
 function tick() { var c = $('#clk'); if (c) { var d = new Date(); c.textContent = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US'); } }
 var ACTION_RX = /^(dock|toggle|nav|closecur|closeall|closeother|palette|about|home|logout|closeshift|mypass)/;
 function okItem(it) { if (it === '-' || it[0] === '%wins') return true; if (it[4] === 'direct' && !PD.DB.settings.allowDirect) return false; if (ACTION_RX.test(it[1])) return true; return can(it[1]); }
