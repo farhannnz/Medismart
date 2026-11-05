@@ -31,20 +31,35 @@ PD.views.billing = { render: function (host, arg) {
   PD.hotkeys = {};
   var D = PD.DB, S = D.settings, cart = [], meta = { customerId: '', doctor: '', paddr: '', dreg: '', payMode: 'cash', received: '', discPct: '', discAmt: '', remarks: '' }, sel = -1, idx = 0, results = [], browse = -1;
   if (arg && arg.recalled) { cart = arg.recalled.cart; meta = Object.assign(meta, arg.recalled.meta); }
-  host.innerHTML = '<div class="msw"><div class="msband"><span class="mslogo">' + PD.icon('pill') + '</span><b>Medismart</b></div>' +
-    '<div class="mshead"><div class="msbadge"><span class="rx">Rx</span><div><b>Sale</b><br><small>Billing</small></div></div>' +
-    '<div class="msfld"><label>Date :</label><input class="in" id="bdate" value="' + PD.fmtDate(PD.today()) + '" readonly style="width:110px"><label style="margin-left:14px">Invoice No :</label><span class="g">A</span><input class="in" id="bno" readonly value="" style="width:80px;font-weight:700"></div>' +
-    '<div class="msfld wide"><label>Patient\'s Name :</label><input class="in" id="cus" placeholder="Walk-in (type to search)" autocomplete="off"><button class="btn sm" id="ncus" title="New customer">+</button> <span class="hint" id="cinfo"></span></div>' +
-    '<div class="msfld wide"><label>Doctor\'s Name :</label><input class="in" id="doc" list="docs" placeholder="Doctor name (required for H1 / X)"><datalist id="docs">' + D.doctors.map(function (d) { return '<option value="' + esc(d.name) + '">'; }).join('') + '</datalist></div><div class="msfld wide"><label>Doctor reg. no. :</label><input class="in" id="dreg" placeholder="required for H1 / X"></div><div class="msfld wide"><label>Patient address :</label><input class="in" id="paddr" placeholder="required for H1 / X"></div></div>' +
-    '<div class="subtab"><span>Invoice - 1</span></div>' +
+  var shopN = (D.shop && D.shop.name) || 'Medismart', fyA = new Date().getMonth() >= 3 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+  host.innerHTML = '<div class="msw ssw">' +
+    '<div class="sband"><b class="sb1">&#10010; Medismart</b><span class="sb2">' + esc(shopN) + '</span><span class="sb3">01/04/' + fyA + ' &nbsp;TO&nbsp; 31/03/' + (fyA + 1) + '</span><span class="sb4">Login &nbsp; ' + esc(PD.user.name) + '</span></div>' +
+    '<div class="stitle"><span>SALE</span><span id="ser">A</span><span>Gst</span></div>' +
+    '<div class="shead"><label>VrNo:</label><input class="in" id="bno" readonly style="width:130px"><label>Date</label><input class="in" id="bdate" readonly value="' + PD.fmtDate(PD.today()) + '" style="width:130px"><label>BillNo</label><input class="in" id="bno2" readonly style="width:130px"><span class="sp"></span>' +
+    '<button class="mb" id="hold">&#9208; Stand by</button><button class="mb" id="holds">Held (<span id="hn">0</span>)</button><button class="mb" id="prev">&#9664;</button><button class="mb" id="disp">Display</button><button class="mb" id="next">&#9654;</button></div>' +
+    '<div class="skeys">Del Item Ctrl+D &nbsp; F3 Item Search, Enter Add item &nbsp; Ctrl+Enter Save &nbsp; F9 Stand by &nbsp; F10 Print save</div>' +
     '<div class="msgrid"><table class="t" id="cart"></table></div>' +
-    '<div class="msentry"><div class="ehead"><span style="width:62px">Item ID</span><span style="flex:1">Item Name</span><span style="width:90px">Batch</span><span style="width:62px">Exp.Date</span><span style="width:52px">Qty</span><span style="width:62px">MRP</span><span style="width:52px">Disc</span><span style="width:70px">Rate</span><span style="width:72px">Amount</span><span style="width:46px">Tax%</span></div>' +
+    '<div class="msentry"><div class="ehead"><span style="width:62px">Item ID</span><span style="flex:1">Item Name (type name / generic)</span><span style="width:90px">Batch</span><span style="width:62px">Exp.Date</span><span style="width:52px">Qty</span><span style="width:62px">MRP</span><span style="width:52px">Disc</span><span style="width:70px">Rate</span><span style="width:72px">Amount</span><span style="width:46px">Tax%</span></div>' +
     '<div class="erow"><input class="in" id="eid" readonly style="width:62px"><div style="flex:1;position:relative"><input class="in" id="q" placeholder="*  (type name / generic, F3)" autocomplete="off"><div class="sres" id="res"></div></div><input class="in" id="eb" readonly style="width:90px"><input class="in" id="ee" readonly style="width:62px"><input class="in" id="eq" readonly style="width:52px"><input class="in" id="em" readonly style="width:62px"><input class="in" id="ed" readonly style="width:52px"><input class="in" id="er" readonly style="width:70px"><input class="in" id="ea" readonly style="width:72px"><input class="in" id="et" readonly style="width:46px"></div></div>' +
-    '<div class="msbot"><div class="mspanel"><div class="subtabs"><span class="on">&nbsp;&nbsp;.&nbsp;&nbsp;</span><span>Allocation</span><span>On A/c</span><span>Last Bills</span></div><div class="mspb">' +
-    '<div class="r3"><label>No of Items :</label><input class="in" id="ni" readonly><label>Qty :</label><input class="in" id="nq" readonly><label>Received :</label><input class="in" id="rc" type="number" step="any"><label>Disc :</label><input class="in" id="dpv" type="number" step="any" placeholder="%"></div>' +
-    '<div class="r3"><label>Pharmacist :</label><input class="in" id="ph" readonly value="' + esc(PD.user.name) + '" style="flex:1"><label>Remarks :</label><input class="in" id="rem" style="flex:1.4"></div></div></div>' +
-    '<div class="mstot" id="tot"></div></div>' +
-    '<div class="msbtns"><button class="mb" id="hold">⏸ Stand by</button><button class="mb" id="prev">◀ Previous</button><button class="mb" id="disp">Display</button><button class="mb" id="next">Next ▶</button><span class="sp"></span><button class="mb" id="savep">🖶 Print</button><button class="mb" id="clr">✕ Delete</button><button class="mb" id="cancel">Cancel</button><button class="mb" id="save">💾 Save</button><button class="mb" id="holds">Held (<span id="hn">0</span>)</button></div></div>';
+    '<div class="sbot">' +
+      '<div class="srec"><div class="skeys">Search (F3), click a bill to open it</div><input class="in sm" id="bsq" placeholder="search bill no / patient" autocomplete="off"><div class="srecw"><table class="t" id="rec"></table></div></div>' +
+      '<div class="smid">' +
+        '<div class="sf"><label>Pay</label><select class="in" id="paysel"><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="credit">Credit</option></select></div>' +
+        '<div class="sf"><label>Party</label><input class="in" id="party" readonly value="CASH SALE"></div>' +
+        '<div class="sf"><label>Patient</label><input class="in" id="cus" placeholder="Walk-in (type to search)" autocomplete="off"><button class="btn sm" id="ncus" title="New customer">+</button></div>' +
+        '<div class="sf"><label>Mobile</label><input class="in" id="mob" readonly></div>' +
+        '<div class="sf"><label>Address</label><input class="in" id="paddr" placeholder="required for H1 / X"></div>' +
+        '<div class="sf"><label>Doctor</label><input class="in" id="doc" list="docs" placeholder="Doctor name (required for H1 / X)"><datalist id="docs">' + D.doctors.map(function (d) { return '<option value="' + esc(d.name) + '">'; }).join('') + '</datalist></div>' +
+        '<div class="sf"><label>PaidAmt</label><input class="in" id="rc" type="number" step="any" style="max-width:130px"><span class="hint" id="cinfo"></span></div>' +
+        '<div class="sf"><label>Balance</label><input class="in" id="bal" readonly style="max-width:130px"></div>' +
+        '<div class="sf"><label>User</label><input class="in" id="ph" readonly value="' + esc(PD.user.name) + '" style="max-width:150px"><label style="min-width:0;margin-left:10px">BillType</label><input class="in" readonly value="Counter" style="max-width:120px"></div>' +
+        '<div class="sf"><label>Narration</label><input class="in" id="rem"></div>' +
+      '</div>' +
+      '<div class="sright"><div class="sprod"><label>ProDisc</label><input class="in" readonly value="0.00"></div><div id="tot"></div>' +
+        '<div class="sf"><label>RegNo</label><input class="in" id="dreg" placeholder="doctor reg. no."></div>' +
+        '<div class="snet"><label>Net Amt</label><b id="netv">0</b></div><div class="sti"><label>Total Items</label><b id="ni">0</b><label style="margin-left:8px">Qty</label><b id="nq">0</b></div><div id="thint"></div></div>' +
+    '</div>' +
+    '<div class="sbtns"><button class="sbtn" id="save"><i>&#128190;</i>Save</button><button class="sbtn" id="savep"><i>&#128438;</i>Print save</button><button class="sbtn" id="edit"><i>&#9998;</i>Edit</button><button class="sbtn wa" id="wa"><i>&#9990;</i>WhatsApp</button><button class="sbtn" id="pdf"><i>&#128196;</i>PDF</button><button class="sbtn" id="cancel"><i>&#10006;</i>Cancel</button><button class="sbtn" id="clr"><i>&#128465;</i>Delete</button></div></div>';
   var q = $('#q', host);
 
   /* item search (the Item Name box of the entry row) */
@@ -87,11 +102,11 @@ PD.views.billing = { render: function (host, arg) {
     ['eid', 'eb', 'ee', 'eq', 'em', 'ed', 'er', 'ea', 'et'].forEach(function (id, i) { $('#' + id, host).value = v[i]; });
   }
   function drawCart() {
-    $('#cart', host).innerHTML = '<thead><tr><th style="width:62px">Item ID</th><th>Item Name</th><th style="width:110px">Batch</th><th style="width:56px">Exp</th><th class="r" style="width:60px">Qty</th><th class="r" style="width:70px">MRP</th><th class="r" style="width:58px">Disc</th><th class="r" style="width:76px">Rate</th><th class="r" style="width:80px">Amount</th><th class="r" style="width:50px">Tax%</th><th class="r" style="width:60px">Tax</th></tr></thead><tbody>' +
+    $('#cart', host).innerHTML = '<thead><tr><th style="width:40px">SN</th><th>ItemName</th><th style="width:56px">Pack</th><th style="width:80px">Cmp</th><th style="width:54px">Shelf</th><th style="width:120px">BatchNo</th><th style="width:76px">Expiry</th><th class="r" style="width:70px">Mrp</th><th class="r" style="width:60px">Qty</th><th class="r" style="width:80px">SaleRate</th><th class="r" style="width:80px">Amount</th><th class="r" style="width:60px">Disc%</th><th class="r" style="width:80px">AdValue</th></tr></thead><tbody>' +
       cart.map(function (l, i) {
-        var it = svc.item(l.itemId), bt = svc.batch(l.batchId), bs = svc.batchesOf(l.itemId, true), tx = PD.num(it.tax || 0), amt = lineAmt(l);
-        return '<tr class="cartrow ' + (i === sel ? 'sel' : '') + '" data-r="' + i + '"><td>' + numId(it.id) + '</td><td class="' + rxc(it) + '">' + esc(it.name) + ' ' + PD.schedBadge(it.schedule) + (rxc(it) ? ' <small>Rx</small>' : '') + '</td><td><select class="in sm" data-b="' + i + '">' + bs.map(function (b) { return '<option value="' + b.id + '"' + (b.id === l.batchId ? ' selected' : '') + '>' + esc(b.batchNo) + ' (' + PD.qty(b.qty) + ')</option>'; }).join('') + '</select></td><td class="' + expc(bt.expiry) + '">' + PD.fmtExp(bt.expiry) + '</td>' +
-          '<td class="r"><input class="in sm qn" data-q="' + i + '" type="number" min="0" step="any" value="' + l.qty + '"></td><td class="r">' + PD.n2(bt.mrp || it.mrp) + '</td><td class="r"><input class="in sm" data-d="' + i + '" type="number" min="0" max="100" step="any" value="' + (l.disc || '') + '"></td><td class="r"><input class="in sm" data-rt="' + i + '" type="number" step="any" value="' + l.rate + '"></td><td class="r"><b data-am="' + i + '">' + PD.n2(amt) + '</b></td><td class="r">' + tx.toFixed(1) + '</td><td class="r" data-tx="' + i + '">' + PD.n2(amt - amt / (1 + tx / 100)) + '</td></tr>';
+        var it = svc.item(l.itemId), bt = svc.batch(l.batchId), bs = svc.batchesOf(l.itemId, true), amt = lineAmt(l);
+        return '<tr class="cartrow ' + (i === sel ? 'sel' : '') + '" data-r="' + i + '"><td>' + (i + 1) + '</td><td class="' + rxc(it) + '">' + esc(it.name) + ' ' + PD.schedBadge(it.schedule) + '</td><td>' + esc(it.pack || '') + '</td><td>' + esc(String(svc.mfrName(it.mfrId) || '').slice(0, 8)) + '</td><td>' + esc(it.rack || '') + '</td><td><select class="in sm" data-b="' + i + '">' + bs.map(function (b) { return '<option value="' + b.id + '"' + (b.id === l.batchId ? ' selected' : '') + '>' + esc(b.batchNo) + ' (' + PD.qty(b.qty) + ')</option>'; }).join('') + '</select></td><td class="' + expc(bt.expiry) + '">' + PD.fmtExp(bt.expiry) + '</td>' +
+          '<td class="r">' + PD.n2(bt.mrp || it.mrp) + '</td><td class="r"><input class="in sm qn" data-q="' + i + '" type="number" min="0" step="any" value="' + l.qty + '"></td><td class="r"><input class="in sm" data-rt="' + i + '" type="number" step="any" value="' + l.rate + '"></td><td class="r" data-gm="' + i + '">' + PD.n2(PD.num(l.qty) * PD.num(l.rate)) + '</td><td class="r"><input class="in sm" data-d="' + i + '" type="number" min="0" max="100" step="any" value="' + (l.disc || '') + '"></td><td class="r"><b data-am="' + i + '">' + PD.n2(amt) + '</b></td></tr>';
       }).join('') + '</tbody>';
     totals(); showEntry();
   }
@@ -99,17 +114,20 @@ PD.views.billing = { render: function (host, arg) {
   var PAYS = [['cash', 'CASH'], ['upi', 'UPI'], ['card', 'CARD'], ['credit', 'CREDIT']];
   function totals() {
     var c = calc(), exact = c.total, grand = S.rounding ? Math.round(exact) : exact, ro = PD.r2(grand - exact), series = {};
-    cart.forEach(function (l, i) { var a = $('[data-am="' + i + '"]', host); if (a) a.textContent = PD.n2(lineAmt(l)); var t = $('[data-tx="' + i + '"]', host); if (t) { var tx = PD.num(svc.item(l.itemId).tax || 0); t.textContent = PD.n2(lineAmt(l) - lineAmt(l) / (1 + tx / 100)); } series[svc.seriesOf(svc.item(l.itemId))] = 1; });
+    cart.forEach(function (l, i) { var a = $('[data-am="' + i + '"]', host); if (a) a.textContent = PD.n2(lineAmt(l)); var g = $('[data-gm="' + i + '"]', host); if (g) g.textContent = PD.n2(PD.num(l.qty) * PD.num(l.rate)); series[svc.seriesOf(svc.item(l.itemId))] = 1; });
     var rec = meta.received === '' ? (meta.payMode === 'credit' ? 0 : grand) : PD.num(meta.received), nSer = Object.keys(series).length;
-    $('#ni', host).value = cart.length; $('#nq', host).value = PD.qty(cart.reduce(function (a, l) { return a + PD.num(l.qty); }, 0));
+    $('#ni', host).textContent = cart.length; $('#nq', host).textContent = PD.qty(cart.reduce(function (a, l) { return a + PD.num(l.qty); }, 0));
     var rcI = $('#rc', host); if (document.activeElement !== rcI) rcI.value = meta.received === '' ? '' : meta.received; rcI.placeholder = PD.n2(grand);
-    $('#tot', host).innerHTML = '<div class="tl"><label>Total :</label><input class="in" readonly value="' + PD.n2(c.gross) + '"><label>Disc :</label><input class="in" id="dp" type="number" placeholder="%" value="' + esc(meta.discPct) + '" style="width:46px"><input class="in" id="da" type="number" placeholder="amt" value="' + esc(meta.discAmt) + '" style="width:70px"></div>' +
-      '<div class="tl"><label>Tax :</label><input class="in" readonly value="' + PD.n2(c.tax) + '"><label>' + (ro ? 'R.off ' + PD.n2(ro) : '') + '</label></div><div class="tl"><label>Cess :</label><input class="in" readonly value="0%" style="width:40px"><input class="in" readonly value="0.00"></div>' +
-      '<div class="net"><span>Net Total :</span><b>' + PD.n2(grand) + '</b></div>' +
-      '<div class="paybar" id="pay">' + PAYS.map(function (p) { return '<button data-p="' + p[0] + '" class="' + (meta.payMode === p[0] ? 'on' : '') + '">' + p[1] + '</button>'; }).join('') + '</div>' +
+    $('#paysel', host).value = meta.payMode; $('#party', host).value = meta.payMode === 'credit' ? 'CREDIT SALE' : 'CASH SALE';
+    $('#bal', host).value = PD.n2(Math.max(0, grand - rec));
+    $('#tot', host).innerHTML = '<div class="sf gr"><label>Gross</label><input class="in" readonly value="' + PD.n2(c.gross) + '"></div>' +
+      '<div class="sf"><label>Disc%</label><input class="in" id="dp" type="number" placeholder="%" value="' + esc(meta.discPct) + '" style="width:70px"><input class="in" id="da" type="number" placeholder="amt" value="' + esc(meta.discAmt) + '" style="width:80px"></div>' +
+      '<div class="sf fd"><label>Final Discount</label><input class="in" readonly value="' + PD.n2(c.disc) + '"></div>';
+    $('#netv', host).textContent = PD.n2(grand);
+    $('#thint', host).innerHTML = '<div class="hint">Tax included: ' + PD.n2(c.tax) + (ro ? ' &bull; R.off ' + PD.n2(ro) : '') + '</div>' +
       (nSer > 1 && S.multiSeries ? '<div class="hint">Saves as <b>' + nSer + ' bills</b> (' + Object.keys(series).join(', ') + ')</div>' : '') +
-      (meta.payMode === 'credit' ? '<div class="hint">Balance due: <b style="color:#c00">' + PD.n2(Math.max(0, grand - rec)) + '</b></div>' : (rec - grand >= 0 ? '<div class="hint">Change: <b>' + PD.n2(rec - grand) + '</b></div>' : '<div class="hint" style="color:#c00">Short by ' + PD.n2(grand - rec) + '</div>'));
-    var ser = cart.length ? svc.seriesOf(svc.item(cart[0].itemId)) : 'A'; $('#bno', host).value = (D.counters['S-' + ser] || 0) + 1; $('.msfld .g', host).textContent = ser;
+      (meta.payMode === 'credit' ? '' : (rec - grand >= 0 ? '<div class="hint">Change: <b>' + PD.n2(rec - grand) + '</b></div>' : '<div class="hint" style="color:#c00">Short by ' + PD.n2(grand - rec) + '</div>'));
+    var ser = cart.length ? svc.seriesOf(svc.item(cart[0].itemId)) : 'A'; $('#bno', host).value = (D.counters['S-' + ser] || 0) + 1; $('#ser', host).textContent = ser;
     $('#hn', host).textContent = D.holds.length;
     totals.grand = grand; totals.rec = rec;
   }
@@ -131,13 +149,12 @@ PD.views.billing = { render: function (host, arg) {
     totals(); var n = $('#' + id, host); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (er) {} }
   });
   $('#rc', host).oninput = function () { meta.received = this.value; totals(); };
-  $('#dpv', host).oninput = function () { meta.discPct = this.value; if (this.value) meta.discAmt = ''; totals(); };
   $('#rem', host).oninput = function () { meta.remarks = this.value; };
-  PD.on($('#tot', host), 'click', '[data-p]', function (e, t) { meta.payMode = t.dataset.p; meta.received = ''; totals(); if (t.dataset.p === 'credit' && !meta.customerId) { PD.toast('Choose a customer (patient) for credit billing'); $('#cus', host).focus(); } });
+  $('#paysel', host).onchange = function () { meta.payMode = this.value; meta.received = ''; totals(); if (meta.payMode === 'credit' && !meta.customerId) { PD.toast('Choose a customer (patient) for credit billing'); $('#cus', host).focus(); } };
 
   /* customer (patient) + doctor */
   var cus = $('#cus', host);
-  function cinfo() { var c = meta.customerId ? svc.customer(meta.customerId) : null, last = c && D.sales.filter(function (s) { return s.customerId === c.id; }).sort(function (a, b) { return b.date.localeCompare(a.date); }), n = last ? last.length : 0; $('#cinfo', host).innerHTML = c ? esc(c.type) + ' • ' + n + ' visit' + (n === 1 ? '' : 's') + (n ? ' • last ' + PD.fmtDate(last[0].date) : ' • first visit') + ' • Outstanding <b>' + PD.n2(svc.partyBalance('cus', c.id)) + '</b> <a href="#" id="chl">history</a>' : ''; var h = $('#chl', host); if (h) h.onclick = function (e) { e.preventDefault(); PD.go('custhist', { customerId: c.id }); }; }
+  function cinfo() { var c = meta.customerId ? svc.customer(meta.customerId) : null, last = c && D.sales.filter(function (s) { return s.customerId === c.id; }).sort(function (a, b) { return b.date.localeCompare(a.date); }), n = last ? last.length : 0; $('#mob', host).value = c ? (c.phone || '') : ''; $('#cinfo', host).innerHTML = c ? esc(c.type) + ' • ' + n + ' visit' + (n === 1 ? '' : 's') + (n ? ' • last ' + PD.fmtDate(last[0].date) : ' • first visit') + ' • Outstanding <b>' + PD.n2(svc.partyBalance('cus', c.id)) + '</b> <a href="#" id="chl">history</a>' : ''; var h = $('#chl', host); if (h) h.onclick = function (e) { e.preventDefault(); PD.go('custhist', { customerId: c.id }); }; }
   PD.combo(cus, { source: function (qv) { qv = qv.toLowerCase(); return D.customers.filter(function (c) { return c.active !== false && (!qv || (c.name + ' ' + (c.phone || '')).toLowerCase().indexOf(qv) >= 0); }).map(function (c) { return { id: c.id, label: '<b>' + esc(c.name) + '</b>', sub: esc(c.phone || ''), right: esc(c.type) }; }); }, onPick: function (x) { meta.customerId = x.id; cus.value = svc.cusName(x.id); cinfo(); } });
   cus.addEventListener('input', function () { if (!cus.value.trim()) { meta.customerId = ''; cinfo(); } });
   $('#ncus', host).onclick = function () {
@@ -171,6 +188,24 @@ PD.views.billing = { render: function (host, arg) {
   $('#prev', host).onclick = function () { showAt(browse < 0 ? bills().length - 1 : browse - 1); };
   $('#next', host).onclick = function () { showAt(browse < 0 ? bills().length - 1 : browse + 1); };
   $('#disp', host).onclick = function () { showAt(bills().length - 1); };
+
+  /* recent bills list, edit, WhatsApp, PDF */
+  function latestBill() { var all = bills(); return (PD.lastBills && PD.lastBills.length ? PD.lastBills[PD.lastBills.length - 1] : all[all.length - 1]); }
+  function recList() {
+    var qv = ($('#bsq', host).value || '').toLowerCase(), tc = { cash: 'C', upi: 'U', card: 'D', credit: 'R' };
+    var rows = D.sales.slice().sort(function (a, b) { return (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')); }).filter(function (b) { return !qv || (String(b.no) + ' ' + (b.customerId ? svc.cusName(b.customerId) : 'cash')).toLowerCase().indexOf(qv) >= 0; }).slice(0, 20);
+    $('#rec', host).innerHTML = '<thead><tr><th>BillNo</th><th>BillDate</th><th>T</th><th>Patient Name</th><th class="r">Amount</th></tr></thead><tbody>' + rows.map(function (b) { return '<tr data-bn="' + b.id + '"><td>' + esc(b.no) + '</td><td>' + PD.fmtDate(b.date) + '</td><td>' + (tc[b.payMode] || 'C') + '</td><td>' + esc(b.customerId ? svc.cusName(b.customerId) : 'CASH SALE') + '</td><td class="r">' + PD.n2(b.total) + '</td></tr>'; }).join('') + '</tbody>';
+  }
+  $('#bsq', host).oninput = recList; recList();
+  PD.on($('#rec', host), 'click', '[data-bn]', function (e, t) { var b = D.sales.find(function (x) { return x.id === t.dataset.bn; }); if (b) PD.showBill(b, function () { PD.views.billing.render(host, null); }); });
+  $('#edit', host).onclick = function () { var b = latestBill(); if (!b) { PD.toast('No saved bills yet'); return; } PD.showBill(b, function () { PD.views.billing.render(host, null); }); };
+  $('#pdf', host).onclick = function () { var b = latestBill(); if (!b) { PD.toast('No saved bills yet'); return; } PD.printBill(b); PD.toast('In the print window choose "Save as PDF"'); };
+  $('#wa', host).onclick = function () {
+    var b = latestBill(); if (!b) { PD.toast('Save a bill first, then press WhatsApp'); return; }
+    var c = b.customerId ? svc.customer(b.customerId) : null, ph = String((c && c.phone) || '').replace(/[^0-9]/g, ''); if (ph.length === 10) ph = '91' + ph;
+    var txt = (D.shop.name || 'Medismart') + '\nBill ' + b.no + ' (' + PD.fmtDate(b.date) + ')\n' + b.lines.map(function (l) { return l.name + ' x ' + PD.qty(l.qty) + ' = ' + PD.n2(l.amount); }).join('\n') + '\nTotal: ' + PD.n2(b.total) + '\n' + (D.shop.footer || 'Thank you!');
+    window.open('https://wa.me/' + ph + '?text=' + encodeURIComponent(txt), '_blank');
+  };
 
   /* save */
   function save(print) {
