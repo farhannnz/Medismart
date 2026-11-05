@@ -161,7 +161,7 @@ svc.batchesOf = function (itemId, sellable) {
 svc.stockOf = function (itemId) { var s = 0; D().batches.forEach(function (b) { if (b.itemId === itemId) s += b.qty; }); return PD.r2(s); };
 svc.stockMap = function () { var m = {}; D().batches.forEach(function (b) { m[b.itemId] = (m[b.itemId] || 0) + b.qty; }); return m; };
 svc.stockValue = function () { var v = 0; D().batches.forEach(function (b) { v += b.qty * (b.rate || 0); }); return PD.r2(v); };
-svc.move = function (m) { m.id = PD.uid('m'); D().moves.push(m); return m; };
+svc.move = function (m) { m.id = PD.uid('m'); if (!m.at) m.at = new Date().toISOString(); D().moves.push(m); return m; };
 svc.lastPurchase = function (itemId, supplierId) {
   var P = D().purchases, i, j, l;
   for (i = P.length - 1; i >= 0; i--) {
@@ -265,11 +265,11 @@ svc.seriesOf = function (item) {
   return (S.series && S.series[item ? item.cat : 'Other']) || 'S';
 };
 svc.calcBill = function (lines, discPct, discAmt) {
-  var sum = 0; lines.forEach(function (l) { l._net = PD.num(l.qty) * PD.num(l.rate) * (1 - PD.num(l.disc) / 100); sum += l._net; });
-  var bd = PD.num(discPct) > 0 ? sum * PD.num(discPct) / 100 : Math.min(PD.num(discAmt), sum);
+  var sum = 0, dsum = 0; lines.forEach(function (l) { l._net = PD.num(l.qty) * PD.num(l.rate) * (1 - PD.num(l.disc) / 100); sum += l._net; if (!l.nd) dsum += l._net; });
+  var bd = PD.num(discPct) > 0 ? dsum * PD.num(discPct) / 100 : Math.min(PD.num(discAmt), dsum);
   var tax = 0, taxable = 0, total = 0;
   lines.forEach(function (l) {
-    var share = sum > 0 ? l._net / sum : 0, net = l._net - bd * share, t = l.tax || 0, tx = net * t / (100 + t);
+    var share = (!l.nd && dsum > 0) ? l._net / dsum : 0, net = l._net - bd * share, t = l.tax || 0, tx = net * t / (100 + t);
     l._fin = PD.r2(net); l._tax = PD.r2(tx); l._taxable = PD.r2(net - tx);
     tax += tx; taxable += net - tx; total += net;
   });
@@ -288,15 +288,17 @@ svc.postSale = function (bill) {
     var key = svc.seriesOf(it); if (!groups[key]) { groups[key] = []; order.push(key); }
     groups[key].push(l);
   });
+  bill.lines.forEach(function (l) { var xi = svc.item(l.itemId); if (xi && xi.noDisc) l.disc = 0; });   /* discount-exempt medicines: no line discount */
   /* guards: expired batch, selling above MRP, discount limit for non-admins, H1 / X details, credit limit for non-admins */
   var admin = !!(PD.user && PD.user.role === 'Admin'), maxD = PD.num(S.maxDisc), sumNet0 = 0, needRx = false;
-  bill.lines.forEach(function (l) { sumNet0 += PD.num(l.qty) * PD.num(l.rate) * (1 - PD.num(l.disc) / 100); });
+  bill.lines.forEach(function (l) { if (!svc.item(l.itemId).noDisc) sumNet0 += PD.num(l.qty) * PD.num(l.rate) * (1 - PD.num(l.disc) / 100); });
   var billPct = PD.num(bill.discPct) > 0 ? PD.num(bill.discPct) : (sumNet0 > 0 ? Math.min(PD.num(bill.discAmt), sumNet0) / sumNet0 * 100 : 0);
   bill.lines.forEach(function (l) {
     var it = svc.item(l.itemId), b = svc.batch(l.batchId), mrp = PD.num(b.mrp) || PD.num(it.mrp);
     if (b.expiry && PD.daysToExp(b.expiry) < 0) throw new Error(it.name + ' batch ' + b.batchNo + ' expired in ' + PD.fmtExp(b.expiry) + ' and cannot be sold');
     if (!S.allowAboveMrp && mrp > 0 && PD.num(l.rate) > mrp + 0.005) throw new Error(it.name + ': rate ' + PD.n2(l.rate) + ' is above the MRP ' + PD.n2(mrp) + '. Selling above MRP is not allowed.');
-    if (maxD > 0 && !admin && mrp > 0) { var eff = (1 - PD.num(l.rate) * (1 - PD.num(l.disc) / 100) * (1 - billPct / 100) / mrp) * 100; if (eff > maxD + 0.05) throw new Error(it.name + ': discount ' + eff.toFixed(1) + '% is more than the allowed ' + maxD + '%. Ask the admin to bill it.'); }
+    if (it.noDisc && mrp > 0 && PD.num(l.rate) < mrp - 0.005) throw new Error(it.name + ' is discount-exempt: it must be sold at MRP ' + PD.n2(mrp) + ' (no discount allowed).');
+    if (maxD > 0 && !admin && mrp > 0) { var eff = (1 - PD.num(l.rate) * (1 - PD.num(l.disc) / 100) * (1 - (it.noDisc ? 0 : billPct) / 100) / mrp) * 100; if (eff > maxD + 0.05) throw new Error(it.name + ': discount ' + eff.toFixed(1) + '% is more than the allowed ' + maxD + '%. Ask the admin to bill it.'); }
     if (it.schedule === 'H1' || it.schedule === 'X') needRx = true;
   });
   if (needRx) {
@@ -308,19 +310,19 @@ svc.postSale = function (bill) {
   if ((bill.payMode || 'cash') === 'credit' && bill.customerId && !admin) {
     var cu = svc.customer(bill.customerId);
     if (cu && cu.type !== 'Special' && PD.num(cu.limit) > 0) {
-      var est = svc.calcBill(bill.lines.map(function (l) { return { qty: l.qty, rate: l.rate, disc: l.disc, tax: svc.item(l.itemId).tax || 0 }; }), bill.discPct, bill.discAmt).total, owe = svc.partyBalance('cus', cu.id) + Math.max(0, (S.rounding ? Math.round(est) : est) - PD.num(bill.received));
+      var est = svc.calcBill(bill.lines.map(function (l) { return { qty: l.qty, rate: l.rate, disc: l.disc, tax: svc.item(l.itemId).tax || 0, nd: !!svc.item(l.itemId).noDisc }; }), bill.discPct, bill.discAmt).total, owe = svc.partyBalance('cus', cu.id) + Math.max(0, (S.rounding ? Math.round(est) : est) - PD.num(bill.received));
       if (owe > PD.num(cu.limit) + 0.005) throw new Error('Credit limit of ' + PD.n2(cu.limit) + ' would be exceeded for ' + cu.name + ' (outstanding ' + PD.n2(owe) + '). Ask the admin.');
     }
   }
   /* stock check across the whole bill first */
   var need = {}; bill.lines.forEach(function (l) { need[l.batchId] = (need[l.batchId] || 0) + PD.num(l.qty); });
   for (var bid in need) { var bb = svc.batch(bid); if (bb.qty + 1e-9 < need[bid]) throw new Error('Only ' + PD.qty(bb.qty) + ' in stock for ' + svc.itemName(bb.itemId) + ' (batch ' + bb.batchNo + ')'); }
-  var totalGross = 0; bill.lines.forEach(function (l) { totalGross += PD.num(l.qty) * PD.num(l.rate) * (1 - PD.num(l.disc) / 100); });
+  var totalGross = 0; bill.lines.forEach(function (l) { if (!svc.item(l.itemId).noDisc) totalGross += PD.num(l.qty) * PD.num(l.rate) * (1 - PD.num(l.disc) / 100); });
   var out = [];
   order.forEach(function (series) {
-    var ls = groups[series], g = 0; ls.forEach(function (l) { g += PD.num(l.qty) * PD.num(l.rate) * (1 - PD.num(l.disc) / 100); });
-    var share = totalGross > 0 ? g / totalGross : 1;
-    var calc = svc.calcBill(ls.map(function (l) { var it = svc.item(l.itemId); return { qty: l.qty, rate: l.rate, disc: l.disc, tax: it.tax || 0, src: l }; }), bill.discPct, PD.num(bill.discAmt) * share);
+    var ls = groups[series], g = 0; ls.forEach(function (l) { if (!svc.item(l.itemId).noDisc) g += PD.num(l.qty) * PD.num(l.rate) * (1 - PD.num(l.disc) / 100); });
+    var share = totalGross > 0 ? g / totalGross : 0;
+    var calc = svc.calcBill(ls.map(function (l) { var it = svc.item(l.itemId); return { qty: l.qty, rate: l.rate, disc: l.disc, tax: it.tax || 0, nd: !!it.noDisc, src: l }; }), bill.discPct, PD.num(bill.discAmt) * share);
     var exact = calc.total, grand = S.rounding ? Math.round(exact) : exact, ro = PD.r2(grand - exact);
     var mode = bill.payMode || 'cash', credit = mode === 'credit';
     if (credit && !bill.customerId) throw new Error('Select a customer for credit billing');

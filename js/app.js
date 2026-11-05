@@ -5,7 +5,7 @@ var PD = window.PD, esc = PD.esc, svc = PD.svc, $ = PD.$, $$ = PD.$$;
 
 var NAV = [
   ['Overview', [['dashboard', 'Dashboard', 'dash', 'F1']]],
-  ['Sales', [['billing', 'Sales Bill', 'bill', 'F2'], ['salesret', 'Sales Return', 'ret', ''], ['custhist', 'Customer History', 'users', '']]],
+  ['Sales', [['billing', 'Sales Bill', 'bill', 'F2'], ['salesret', 'Sales Return', 'ret', ''], ['custhist', 'Customer History', 'users', ''], ['nodisc', 'Discount-Exempt Medicines', 'bill', '']]],
   ['Warehouse', [['request', 'Stock Request', 'order', 'F3'], ['reqlist', 'Request List', 'order', ''], ['receive', 'Receive Stock', 'cart', 'F4']]],
   ['Stock', [['stock', 'Current Stock', 'box', 'F5'], ['shelves', 'Shelves', 'box', ''], ['expiry', 'Expiry Watch', 'clock', ''], ['expclaim', 'Return Expired Stock', 'clock', '']]],
   ['Insights', [['reports', 'Reports', 'report', 'F7'], ['accounts', 'Accounts', 'book', 'F8']]],
@@ -64,7 +64,7 @@ var MENUS = [
     ['Backup && Restore', 'settings', { tab: 'data' }], ['Activity Log', 'settings', { tab: 'log' }], '-',
     ['Change My Password', 'mypass'], ['Log Out', 'logout']]],
   ['Sale', [
-    ['Sales Bill', 'billing', { fresh: 1 }, 'F2'], ['Sales Return', 'salesret'], ['Customer History', 'custhist'], '-',
+    ['Sales Bill', 'billing', { fresh: 1 }, 'F2'], ['Sales Return', 'salesret'], ['Customer History', 'custhist'], ['Discount-Exempt Medicines', 'nodisc'], '-',
     ['Sales Register', 'reports', { report: 'sales-reg' }], ['Items Sold', 'reports', { report: 'sales-item' }], ['Sales Tax Report', 'reports', { report: 'sales-tax' }],
     ['Doctor wise Sales', 'reports', { report: 'sales-doc' }], ['Schedule H/H1/X Register', 'reports', { report: 'sched-reg' }]]],
   ['Stock', [
@@ -95,7 +95,7 @@ var TOOLS = [
   ['Settings', 'gear', 'settings', '#666'], ['Log out', 'lock', 'logout', '#7a8a2e']
 ];
 var TITLES = {}; NAV.forEach(function (g) { g[1].forEach(function (i) { TITLES[i[0]] = i[1]; }); }); TITLES.home = 'Medismart'; TITLES.shelves = 'Shelves'; TITLES.whreturn = 'Return to Warehouse'; TITLES.cashreg = 'Cash Register'; TITLES.itemsimport = 'Import Item List'; TITLES.dnote = 'Delivery Note'; TITLES.batchedit = 'Batch Edit'; TITLES.expclaim = 'ExpiryClaim'; TITLES.itemdlg = 'Item'; TITLES.acctdlg = 'Account Details'; TITLES.request = 'Stock Request'; TITLES.reqlist = 'Request List'; TITLES.receive = 'Receive Stock'; TITLES.attendance = 'Attendance'; TITLES.custhist = 'Customer History';
-var RIGHT = { dnote: 'orders', batchedit: 'stock', expclaim: 'expiry', itemdlg: 'masters', acctdlg: 'accounts', shelves: 'stock', itemsimport: 'requests', whreturn: 'requests', cashreg: 'attendance', request: 'requests', reqlist: 'requests', receive: 'requests', custhist: 'billing' };
+var RIGHT = { dnote: 'orders', batchedit: 'stock', expclaim: 'expiry', itemdlg: 'masters', acctdlg: 'accounts', shelves: 'stock', itemsimport: 'requests', whreturn: 'requests', cashreg: 'attendance', request: 'requests', reqlist: 'requests', receive: 'requests', custhist: 'billing', nodisc: 'masters' };
 var wins = [], cur = 'home', docks = { items: false, mfrs: false, sups: false, msg: true }, ui = { toolbar: true, status: true };
 PD.go = function (route, arg) { openWin(route, arg); };
 
