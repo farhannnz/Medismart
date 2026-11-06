@@ -27,16 +27,22 @@ PD.itemNo = function (id) { var m = PD.itemNo.map; if (!m || m.n !== PD.DB.items
 function numId(id) { return PD.itemNo(id); }
 function rxc(it) { return it.schedule === 'H1' || it.schedule === 'X' ? 'rx2' : it.schedule === 'H' ? 'rx' : ''; }
 function expc(e) { if (!e) return ''; var d = PD.daysToExp(e); return d < 0 ? 'expd' : d <= (PD.DB.settings.expiryDays || 90) ? 'expw' : ''; }
+PD.billTabN = 0;
+PD.newBillTab = function () { PD.billTabN++; PD.go('billing', { fresh: 1, tab: 'b' + PD.billTabN, title: 'Sales Bill ' + (PD.billTabN + 1) }); };
 PD.views.billing = { render: function (host, arg) {
   PD.hotkeys = {};
   var D = PD.DB, S = D.settings, cart = [], meta = { customerId: '', doctor: '', paddr: '', dreg: '', payMode: 'cash', received: '', discPct: '', discAmt: '', remarks: '' }, sel = -1, idx = 0, results = [], browse = -1;
+  /* each Sales Bill tab keeps its own cart (PD.billState[tab]) so you can switch between customers */
+  var tab = (arg && arg.tab) || ''; PD.billState = PD.billState || {};
   if (arg && arg.recalled) { cart = arg.recalled.cart; meta = Object.assign(meta, arg.recalled.meta); }
+  else if (!(arg && arg.fresh) && PD.billState[tab]) { cart = PD.billState[tab].cart; meta = PD.billState[tab].meta; }
+  function again(a) { delete PD.billState[tab]; PD.views.billing.render(host, Object.assign({ tab: tab, fresh: 1 }, a || {})); }
   var shopN = (D.shop && D.shop.name) || 'Medismart', fyA = new Date().getMonth() >= 3 ? new Date().getFullYear() : new Date().getFullYear() - 1;
   host.innerHTML = '<div class="msw ssw">' +
     '<div class="sband"><b class="sb1">&#10010; Medismart</b><span class="sb2">' + esc(shopN) + '</span><span class="sb3">01/04/' + fyA + ' &nbsp;TO&nbsp; 31/03/' + (fyA + 1) + '</span><span class="sb4">Login &nbsp; ' + esc(PD.user.name) + '</span></div>' +
     '<div class="stitle"><span>SALE</span><span id="ser">A</span><span>Gst</span></div>' +
     '<div class="shead"><label>VrNo:</label><input class="in" id="bno" readonly style="width:130px"><label>Date</label><input class="in" id="bdate" readonly value="' + PD.fmtDate(PD.today()) + '" style="width:130px"><label>BillNo</label><input class="in" id="bno2" readonly style="width:130px"><span class="sp"></span>' +
-    '<button class="mb" id="hold">&#9208; Stand by</button><button class="mb" id="holds">Held (<span id="hn">0</span>)</button><button class="mb" id="prev">&#9664;</button><button class="mb" id="disp">Display</button><button class="mb" id="next">&#9654;</button></div>' +
+    '<button class="mb" id="newtab" title="Open another Sales Bill tab (F6)">&#10133; New bill tab</button><button class="mb" id="hold">&#9208; Stand by</button><button class="mb" id="holds">Held (<span id="hn">0</span>)</button><button class="mb" id="prev">&#9664;</button><button class="mb" id="disp">Display</button><button class="mb" id="next">&#9654;</button></div>' +
     '<div class="skeys">Del Item Ctrl+D &nbsp; F3 Item Search, Enter Add item &nbsp; Ctrl+Enter Save &nbsp; F9 Stand by &nbsp; F10 Print save</div>' +
     '<div class="msgrid"><table class="t" id="cart"></table></div>' +
     '<div class="msentry"><div class="ehead"><span style="width:62px">Item ID</span><span style="flex:1">Item Name (type name / generic)</span><span style="width:90px">Batch</span><span style="width:62px">Exp.Date</span><span style="width:52px">Qty</span><span style="width:62px">MRP</span><span style="width:52px">Disc</span><span style="width:70px">Rate</span><span style="width:72px">Amount</span><span style="width:46px">Tax%</span></div>' +
@@ -130,7 +136,7 @@ PD.views.billing = { render: function (host, arg) {
       (meta.payMode === 'credit' ? '' : (rec - grand >= 0 ? '<div class="hint">Change: <b>' + PD.n2(rec - grand) + '</b></div>' : '<div class="hint" style="color:#c00">Short by ' + PD.n2(grand - rec) + '</div>'));
     var ser = cart.length ? svc.seriesOf(svc.item(cart[0].itemId)) : 'A'; $('#bno', host).value = (D.counters['S-' + ser] || 0) + 1; $('#ser', host).textContent = ser;
     $('#hn', host).textContent = D.holds.length;
-    totals.grand = grand; totals.rec = rec;
+    totals.grand = grand; totals.rec = rec; PD.billState[tab] = { cart: cart, meta: meta };
   }
   PD.on($('#cart', host), 'input', '[data-q],[data-rt],[data-d]', function (e, t) {
     var i = +(t.dataset.q || t.dataset.rt || t.dataset.d), l = cart[i]; sel = i;
@@ -172,14 +178,14 @@ PD.views.billing = { render: function (host, arg) {
   function hold() {
     if (!cart.length) { PD.toast('Nothing to put on stand by'); return; }
     D.holds.push({ id: PD.uid('h'), time: PD.nowTime(), label: meta.customerId ? svc.cusName(meta.customerId) : 'Walk-in', cart: JSON.parse(JSON.stringify(cart)), meta: JSON.parse(JSON.stringify(meta)), total: totals.grand });
-    PD.save(); PD.toast('Bill is on stand by. Serve the next customer.', 'ok'); PD.views.billing.render(host, null);
+    PD.save(); PD.toast('Bill is on stand by. Serve the next customer.', 'ok'); again();
   }
   $('#hold', host).onclick = hold;
   $('#holds', host).onclick = function () {
     var m = PD.modal({ title: 'Stand by bills', size: 'md', body: '<div id="hl"></div>', foot: [{ label: 'Close' }] });
     function list() { PD.$('#hl', m.el).innerHTML = D.holds.length ? '<table class="t"><tbody>' + D.holds.map(function (h) { return '<tr><td><b>' + esc(h.label) + '</b><br><small class="mut">At ' + esc(h.time) + ' • ' + h.cart.length + ' items</small></td><td class="r"><b>' + PD.money(h.total || 0) + '</b></td><td class="r nw"><button class="btn sm p" data-rc="' + h.id + '">Recall</button> <button class="btn sm" data-dl="' + h.id + '">Delete</button></td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">No bills on stand by.</div>'; }
     list();
-    PD.on(m.el, 'click', '[data-rc]', function (e, t) { if (cart.length) { PD.toast('Stand by or cancel the current bill first', 'err'); return; } var h = D.holds.find(function (x) { return x.id === t.dataset.rc; }); D.holds = D.holds.filter(function (x) { return x !== h; }); PD.save(); m.close(); PD.views.billing.render(host, { recalled: h }); });
+    PD.on(m.el, 'click', '[data-rc]', function (e, t) { if (cart.length) { PD.toast('Stand by or cancel the current bill first', 'err'); return; } var h = D.holds.find(function (x) { return x.id === t.dataset.rc; }); D.holds = D.holds.filter(function (x) { return x !== h; }); PD.save(); m.close(); PD.views.billing.render(host, { tab: tab, recalled: h }); });
     PD.on(m.el, 'click', '[data-dl]', function (e, t) { D.holds = D.holds.filter(function (x) { return x.id !== t.dataset.dl; }); PD.save(); list(); $('#hn', host).textContent = D.holds.length; });
   };
 
@@ -198,8 +204,8 @@ PD.views.billing = { render: function (host, arg) {
     $('#rec', host).innerHTML = '<thead><tr><th>BillNo</th><th>BillDate</th><th>T</th><th>Patient Name</th><th class="r">Amount</th></tr></thead><tbody>' + rows.map(function (b) { return '<tr data-bn="' + b.id + '"><td>' + esc(b.no) + '</td><td>' + PD.fmtDate(b.date) + '</td><td>' + (tc[b.payMode] || 'C') + '</td><td>' + esc(b.customerId ? svc.cusName(b.customerId) : 'CASH SALE') + '</td><td class="r">' + PD.n2(b.total) + '</td></tr>'; }).join('') + '</tbody>';
   }
   $('#bsq', host).oninput = recList; recList();
-  PD.on($('#rec', host), 'click', '[data-bn]', function (e, t) { var b = D.sales.find(function (x) { return x.id === t.dataset.bn; }); if (b) PD.showBill(b, function () { PD.views.billing.render(host, null); }); });
-  $('#edit', host).onclick = function () { var b = latestBill(); if (!b) { PD.toast('No saved bills yet'); return; } PD.showBill(b, function () { PD.views.billing.render(host, null); }); };
+  PD.on($('#rec', host), 'click', '[data-bn]', function (e, t) { var b = D.sales.find(function (x) { return x.id === t.dataset.bn; }); if (b) PD.showBill(b, function () { again(); }); });
+  $('#edit', host).onclick = function () { var b = latestBill(); if (!b) { PD.toast('No saved bills yet'); return; } PD.showBill(b, function () { again(); }); };
   $('#pdf', host).onclick = function () { var b = latestBill(); if (!b) { PD.toast('No saved bills yet'); return; } PD.printBill(b); PD.toast('In the print window choose "Save as PDF"'); };
   $('#wa', host).onclick = function () {
     var b = latestBill(); if (!b) { PD.toast('Save a bill first, then press WhatsApp'); return; }
@@ -224,7 +230,7 @@ PD.views.billing = { render: function (host, arg) {
         PD.lastBills = bills; PD.toast('Saved ' + bills.map(function (b) { return b.no; }).join(' + ') + ' • ' + PD.money(bills.reduce(function (a, b) { return a + b.total; }, 0)), 'ok');
         if (print) bills.forEach(PD.printBill);
         if (PD.refreshAlerts) PD.refreshAlerts();
-        PD.views.billing.render(host, null);
+        again();
       };
       if (meta.payMode === 'credit' && c && c.type !== 'Special') {
         var out = svc.partyBalance('cus', c.id) + Math.max(0, totals.grand - PD.num(meta.received));
@@ -237,7 +243,8 @@ PD.views.billing = { render: function (host, arg) {
   PD.hotkeys.F3 = { el: host, fn: function () { q.focus(); q.select(); } }; PD.hotkeys.F9 = { el: host, fn: hold }; PD.hotkeys.F10 = { el: host, fn: function () { save(true); } };
   $('.msw', host).addEventListener('keydown', function (e) { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(false); } });
 
-  if (arg && arg.itemId) add(arg.itemId, false);
+  $('#newtab', host).onclick = PD.newBillTab; PD.hotkeys.F6 = { el: host, fn: PD.newBillTab };
+  if (arg && arg.itemId) { var iid = arg.itemId; arg.itemId = ''; add(iid, false); }
   drawCart(); q.focus();
 } };
 
