@@ -254,6 +254,7 @@ PD.views.billing = { render: function (host, arg) {
       go();
     } catch (e) { PD.err(e); }
   }
+  $('#dreg', host).addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); e.stopPropagation(); save(true); } });   /* Enter on RegNo = Print & Save */
   $('#save', host).onclick = function () { save(false); }; $('#savep', host).onclick = function () { save(true); };
   PD.hotkeys.F3 = { el: host, fn: function () { q.focus(); q.select(); } }; PD.hotkeys.F9 = { el: host, fn: hold }; PD.hotkeys.F10 = { el: host, fn: function () { save(true); } };
   $('.msw', host).addEventListener('keydown', function (e) { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(false); } });
