@@ -164,6 +164,20 @@ PD.views.billing = { render: function (host, arg) {
   function cinfo() { var c = meta.customerId ? svc.customer(meta.customerId) : null, last = c && D.sales.filter(function (s) { return s.customerId === c.id; }).sort(function (a, b) { return b.date.localeCompare(a.date); }), n = last ? last.length : 0; $('#mob', host).value = c ? (c.phone || '') : ''; $('#cinfo', host).innerHTML = c ? esc(c.type) + ' • ' + n + ' visit' + (n === 1 ? '' : 's') + (n ? ' • last ' + PD.fmtDate(last[0].date) : ' • first visit') + ' • Outstanding <b>' + PD.n2(svc.partyBalance('cus', c.id)) + '</b> <a href="#" id="chl">history</a>' : ''; var h = $('#chl', host); if (h) h.onclick = function (e) { e.preventDefault(); PD.go('custhist', { customerId: c.id }); }; }
   PD.combo(cus, { source: function (qv) { qv = qv.toLowerCase(); return D.customers.filter(function (c) { return c.active !== false && (!qv || (c.name + ' ' + (c.phone || '')).toLowerCase().indexOf(qv) >= 0); }).map(function (c) { return { id: c.id, label: '<b>' + esc(c.name) + '</b>', sub: esc(c.phone || ''), right: esc(c.type) }; }); }, onPick: function (x) { meta.customerId = x.id; cus.value = svc.cusName(x.id); cinfo(); } });
   cus.addEventListener('input', function () { if (!cus.value.trim()) { meta.customerId = ''; cinfo(); } });
+  /* Enter on the patient (after picking) goes to Discount first, so the customer can be told the bill amount;
+     Enter on the discount then goes where Enter from the patient used to go (address). */
+  var fromCus = false;
+  cus.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    var dp = $('#dp', host); if (!dp) return;
+    e.preventDefault(); e.stopPropagation(); fromCus = true; dp.focus(); try { dp.select(); } catch (er) {}
+  });
+  $('#tot', host).addEventListener('focusout', function (e) { var r = e.relatedTarget; if (!r || (r.id !== 'dp' && r.id !== 'da')) setTimeout(function () { var a = document.activeElement; if (!a || (a.id !== 'dp' && a.id !== 'da')) fromCus = false; }, 0); });
+  PD.on($('#tot', host), 'keydown', '#dp,#da', function (e) {
+    if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || !fromCus) return;
+    var nx = $('#paddr', host); if (!nx) return;
+    e.preventDefault(); e.stopPropagation(); fromCus = false; nx.focus(); try { nx.select(); } catch (er) {}
+  });
   $('#ncus', host).onclick = function () {
     var f = [{ k: 'name', label: 'Name', req: true, full: true }, { k: 'phone', label: 'Phone' }, { k: 'type', label: 'Type', type: 'select', options: ['Regular', 'Special'] }];
     PD.modal({ title: 'New customer', size: 'sm', body: PD.formHTML(f, { type: 'Regular' }), foot: [{ label: 'Cancel' }, { label: 'Save', cls: 'p', fn: function (api) { try { var v = PD.readForm(api.body, f); v.active = true; v.limit = 5000; var r = svc.saveMaster('customers', v); meta.customerId = r.id; cus.value = r.name; cinfo(); } catch (e) { PD.err(e); return false; } } }] });
