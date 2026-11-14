@@ -7,7 +7,7 @@ var NAV = [
   ['Overview', [['dashboard', 'Dashboard', 'dash', 'F1']]],
   ['Sales', [['billing', 'Sales Bill', 'bill', 'F2'], ['salesret', 'Sales Return', 'ret', ''], ['custhist', 'Customer History', 'users', ''], ['nodisc', 'Discount-Exempt Medicines', 'bill', '']]],
   ['Warehouse', [['request', 'Stock Request', 'order', 'F3'], ['reqlist', 'Request List', 'order', ''], ['autoprop', 'Auto Returns & Requests (approve)', 'order', ''], ['receive', 'Receive Stock', 'cart', 'F4']]],
-  ['Stock', [['stock', 'Current Stock', 'box', 'F5'], ['shelves', 'Shelves', 'box', ''], ['expiry', 'Expiry Watch', 'clock', ''], ['expclaim', 'Return Expired Stock', 'clock', '']]],
+  ['Stock', [['stock', 'Current Stock', 'box', 'F5'], ['shelves', 'Shelves', 'box', ''], ['expiry', 'Expiry Watch', 'clock', ''], ['expclaim', 'Return Expired Stock', 'clock', ''], ['fastmoving', 'Fast Moving (7 / 15 / 30 days)', 'report', '']]],
   ['Insights', [['reports', 'Reports', 'report', 'F7'], ['accounts', 'Accounts', 'book', 'F8']]],
   ['Setup', [['attendance', 'Attendance', 'users', ''], ['settings', 'Settings & Staff', 'gear', '']]]
 ];
@@ -95,7 +95,7 @@ var TOOLS = [
   ['Settings', 'gear', 'settings', '#666'], ['Log out', 'lock', 'logout', '#7a8a2e']
 ];
 var TITLES = {}; NAV.forEach(function (g) { g[1].forEach(function (i) { TITLES[i[0]] = i[1]; }); }); TITLES.home = 'Medismart'; TITLES.shelves = 'Shelves'; TITLES.whreturn = 'Return to Warehouse'; TITLES.cashreg = 'Cash Register'; TITLES.itemsimport = 'Import Item List'; TITLES.dnote = 'Delivery Note'; TITLES.batchedit = 'Batch Edit'; TITLES.expclaim = 'ExpiryClaim'; TITLES.itemdlg = 'Item'; TITLES.acctdlg = 'Account Details'; TITLES.request = 'Stock Request'; TITLES.reqlist = 'Request List'; TITLES.receive = 'Receive Stock'; TITLES.attendance = 'Attendance'; TITLES.custhist = 'Customer History';
-var RIGHT = { dnote: 'orders', batchedit: 'stock', expclaim: 'expiry', itemdlg: 'masters', acctdlg: 'accounts', shelves: 'stock', itemsimport: 'requests', whreturn: 'requests', cashreg: 'attendance', request: 'requests', reqlist: 'requests', receive: 'requests', custhist: 'billing', nodisc: 'masters', autoprop: 'requests' };
+var RIGHT = { fastmoving: 'reports', dnote: 'orders', batchedit: 'stock', expclaim: 'expiry', itemdlg: 'masters', acctdlg: 'accounts', shelves: 'stock', itemsimport: 'requests', whreturn: 'requests', cashreg: 'attendance', request: 'requests', reqlist: 'requests', receive: 'requests', custhist: 'billing', nodisc: 'masters', autoprop: 'requests' };
 var wins = [], cur = 'home', docks = { items: false, mfrs: false, sups: false, msg: true }, ui = { toolbar: true, status: true };
 PD.go = function (route, arg) { openWin(route, arg); };
 
