@@ -84,7 +84,8 @@ PD.views.billing = { render: function (host, arg) {
   q.addEventListener('focus', function () { if (q.value === '*') q.select(); search(); });
   q.addEventListener('blur', function () { setTimeout(function () { $('#res', host).style.display = 'none'; }, 160); });
   q.addEventListener('keydown', function (e) {
-    if (e.key === 'ArrowDown') { idx = Math.min(idx + 1, results.length - 1); search(); e.preventDefault(); }
+    if (e.key === 'ArrowDown' && (!q.value.trim() || !results.length)) { var nx = $('#cus', host); if (nx) { e.preventDefault(); $('#res', host).style.display = 'none'; nx.focus(); try { nx.select(); } catch (er) {} } }   /* nothing being searched: Down leaves the item section for the next one (patient) */
+    else if (e.key === 'ArrowDown') { idx = Math.min(idx + 1, results.length - 1); search(); e.preventDefault(); }
     else if (e.key === 'ArrowUp') { idx = Math.max(idx - 1, 0); search(); e.preventDefault(); }
     else if (e.key === 'Enter' && results[idx]) { e.preventDefault(); add(results[idx].id, true); q.value = ''; idx = 0; }
     else if (e.key === 'Escape') $('#res', host).style.display = 'none';
