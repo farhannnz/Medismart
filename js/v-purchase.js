@@ -73,9 +73,9 @@ PD.showPurchase = function (b) { PD.modal({ title: 'Purchase invoice', size: 'xl
 /* ---------- purchase view ---------- */
 PD.views.purchase = { render: function (host, arg) {
   var D = PD.DB, tab = (arg && arg.tab) || 'new';
-  host.innerHTML = '<div class="tabs" id="pt" style="margin-bottom:16px">' + [['new', 'New purchase invoice'], ['list', 'Invoices & tracking'], ['ret', 'Purchase returns']].map(function (t) { return '<button data-t="' + t[0] + '" class="' + (t[0] === tab ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') + '</div><div id="pc"></div>';
+  host.innerHTML = '<div class="tabs" id="pt" style="margin-bottom:16px">' + [['new', 'New purchase invoice'], ['auth', 'Waiting for warehouse (' + ((D.pauth || []).filter(function (x) { return x.status === 'Waiting'; }).length) + ')'], ['list', 'Invoices & tracking'], ['ret', 'Purchase returns']].map(function (t) { return '<button data-t="' + t[0] + '" class="' + (t[0] === tab ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') + '</div><div id="pc"></div>';
   var pc = $('#pc', host);
-  function show(t, a) { PD.$$('#pt button', host).forEach(function (b) { b.classList.toggle('on', b.dataset.t === t); }); pc.innerHTML = ''; ({ 'new': newInvoice, list: list, ret: returns })[t](pc, a); }
+  function show(t, a) { PD.$$('#pt button', host).forEach(function (b) { b.classList.toggle('on', b.dataset.t === t); }); pc.innerHTML = ''; ({ 'new': newInvoice, auth: authList, list: list, ret: returns })[t](pc, a); }
   PD.on($('#pt', host), 'click', 'button', function (e, b) { show(b.dataset.t); });
 
   function newInvoice(el, a) {
@@ -149,10 +149,16 @@ PD.views.purchase = { render: function (host, arg) {
         var f = PD.readForm(el, [{ k: 'supplierId', label: 'Supplier', req: true }, { k: 'invNo', label: 'Invoice no.' }, { k: 'date', label: 'Date', type: 'date', req: true }, { k: 'dueDate', label: 'Due', type: 'date' }]); f.payMode = $('#cashp', el).checked ? 'cash' : 'credit';
         var lines = grid.lines().filter(function (l) { return l.itemId; });
         lines.forEach(function (l) { var it = svc.item(l.itemId); if (it.batch !== false && (!l.batchNo || !l.expiry)) throw new Error('Batch number and expiry are required for ' + it.name); if (!(PD.num(l.rate) > 0)) throw new Error('Enter the rate for ' + it.name); if (!(PD.num(l.mrp) > 0)) throw new Error('Enter the MRP for ' + it.name); });
-        var inv = svc.postPurchase({ supplierId: f.supplierId, invNo: f.invNo, date: f.date, dueDate: f.dueDate, payMode: f.payMode, lines: lines, poId: poSel.value, dnId: dnSel.value });
-        PD.toast('Saved ' + inv.no + ' • ' + PD.money(inv.total), 'ok'); arg = null; show('list');
+        var rq = svc.requestPurchaseAuth({ supplierId: f.supplierId, invNo: f.invNo, date: f.date, dueDate: f.dueDate, payMode: f.payMode, lines: lines, poId: poSel.value, dnId: dnSel.value });
+        PD.toast('Sent to the warehouse for authorization: ' + rq.no + ' • ' + PD.money(rq.total) + '. Stock is added after it authorizes.', 'ok'); arg = null; show('auth');
       } catch (e) { PD.err(e); }
     };
+  }
+
+  function authList(el) {
+    var rows = (D.pauth || []).slice().reverse();
+    el.innerHTML = '<div class="card"><div class="hd"><h3 style="padding:0;border:0">Purchases sent to the warehouse for authorization</h3></div><div class="bd"><p class="hint" style="margin-bottom:8px">A purchase from an outside supplier changes your stock and accounts only after the warehouse authorizes it.</p><div class="tw"><table class="t"><thead><tr><th>No.</th><th>Date</th><th>Supplier</th><th>Invoice</th><th class="r">Items</th><th class="r">Amount</th><th>Status</th></tr></thead><tbody>' +
+      (rows.map(function (r) { var cls = r.status === 'Authorized' ? 'ok' : r.status === 'Rejected' ? 'bad' : 'warn'; return '<tr><td><b>' + esc(r.no) + '</b></td><td>' + PD.fmtDate(r.date) + '</td><td>' + esc(r.supplier) + '</td><td>' + esc(r.invNo) + '</td><td class="r">' + r.lines.length + '</td><td class="r">' + PD.n2(r.total) + '</td><td><span class="badge ' + cls + '">' + esc(r.status) + '</span>' + (r.purNo ? ' ' + esc(r.purNo) : '') + (r.reason ? '<br><small class="mut">' + esc(r.reason) + '</small>' : '') + '</td></tr>'; }).join('') || '<tr><td colspan="7"><div class="empty">Nothing sent yet.</div></td></tr>') + '</tbody></table></div></div></div>';
   }
 
   function list(el) {

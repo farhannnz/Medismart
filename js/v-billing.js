@@ -18,8 +18,16 @@ function cancelModal(b, done) {
   var f = [{ k: 'reason', label: 'Reason for cancelling', req: true, full: true }];
   PD.modal({ title: 'Cancel bill ' + b.no, size: 'sm', body: PD.formHTML(f, {}) + '<p class="hint">Stock goes back, the money entry is reversed and the bill moves to Reports → Cancelled bills. A bill that has returns cannot be cancelled.</p>', foot: [{ label: 'Back' }, { label: 'Cancel this bill', cls: 'd', fn: function (api) { try { svc.cancelSale(b.id, PD.readForm(api.body, f).reason); PD.toast('Bill ' + b.no + ' cancelled', 'ok'); if (PD.refreshAlerts) PD.refreshAlerts(); if (done) done(); } catch (e) { PD.err(e); return false; } } }] });
 }
+/* old bill -> new bill: its items, customer and discount are loaded into a fresh Sales Bill, edit them, then Save / Print save. The old bill is cancelled when the new one is saved. Allowed for 12 hours only. */
+function editAsNew(b) {
+  if (!svc.saleEditable(b)) { PD.toast('Bills can be edited only within ' + svc.EDIT_HOURS + ' hours of making them', 'err'); return; }
+  if (PD.DB.sreturns.some(function (r) { return r.billId === b.id; })) { PD.toast('Returns were made against this bill, so it cannot be edited', 'err'); return; }
+  var cart = b.lines.map(function (l) { return { itemId: l.itemId, batchId: l.batchId, qty: l.qty, rate: l.rate, disc: l.disc || 0 }; });
+  var meta = { customerId: b.customerId || '', doctor: b.doctor || '', paddr: b.patientAddr || '', dreg: b.doctorReg || '', payMode: b.payMode || 'cash', received: b.payMode === 'credit' ? b.paid : '', discPct: '', discAmt: b.disc && b.gross ? PD.r2(b.disc) : '', remarks: '', editOf: b.id, editNo: b.no };
+  PD.billTabN++; PD.go('billing', { tab: 'b' + PD.billTabN, title: 'Edit ' + b.no, recalled: { cart: cart, meta: meta } });
+}
 PD.showBill = function (b, onDone) {
-  PD.modal({ title: 'Bill ' + b.no, size: 'md', body: '<div style="font:13px/1.45 monospace">' + PD.billHTML(b).replace(/<h2>/g, '<h3>').replace(/<\/h2>/g, '</h3>') + '</div><p class="hint">Profit on this bill: ' + PD.money(b.profit) + ' • Entered by ' + esc(b.user) + '</p>', foot: [{ label: 'Close' }].concat(PD.user && PD.user.role === 'Admin' ? [{ label: 'Cancel bill', cls: 'd', fn: function (api) { cancelModal(b, function () { api.close(); if (onDone) onDone(); }); return false; } }] : []).concat([{ label: 'Sales return', fn: function () { PD.go('salesret', { billNo: b.no }); } }, { label: 'Print', cls: 'p', icon: 'print', fn: function () { PD.printBill(b); return false; } }]) });
+  PD.modal({ title: 'Bill ' + b.no, size: 'md', body: '<div style="font:13px/1.45 monospace">' + PD.billHTML(b).replace(/<h2>/g, '<h3>').replace(/<\/h2>/g, '</h3>') + '</div><p class="hint">Profit on this bill: ' + PD.money(b.profit) + ' • Entered by ' + esc(b.user) + (svc.saleEditable(b) ? ' • Can be edited for 12 hours after it was made' : '') + '</p>', foot: [{ label: 'Close' }].concat(svc.saleEditable(b) ? [{ label: 'Edit as new bill', fn: function (api) { api.close(); editAsNew(b); return false; } }] : []).concat(PD.user && PD.user.role === 'Admin' ? [{ label: 'Cancel bill', cls: 'd', fn: function (api) { cancelModal(b, function () { api.close(); if (onDone) onDone(); }); return false; } }] : []).concat([{ label: 'Sales return', fn: function () { PD.go('salesret', { billNo: b.no }); } }, { label: 'Print', cls: 'p', icon: 'print', fn: function () { PD.printBill(b); return false; } }]) });
 };
 
 /* ---------- billing screen (MediSmart "Sale / Billing" window layout) ---------- */
@@ -111,7 +119,7 @@ PD.views.billing = { render: function (host, arg) {
   function drawCart() {
     $('#cart', host).innerHTML = '<thead><tr><th style="width:40px">SN</th><th>ItemName</th><th style="width:56px">Pack</th><th style="width:80px">Cmp</th><th style="width:54px">Shelf</th><th style="width:120px">BatchNo</th><th style="width:76px">Expiry</th><th class="r" style="width:70px">Mrp</th><th class="r" style="width:60px">Qty</th><th class="r" style="width:80px">SaleRate</th><th class="r" style="width:80px">Amount</th><th class="r" style="width:60px">Disc%</th><th class="r" style="width:80px">AdValue</th></tr></thead><tbody>' +
       cart.map(function (l, i) {
-        var it = svc.item(l.itemId), bt = svc.batch(l.batchId), bs = svc.batchesOf(l.itemId, true), amt = lineAmt(l);
+        var it = svc.item(l.itemId), bt = svc.batch(l.batchId), bs = svc.batchesOf(l.itemId, true), amt = lineAmt(l); if (bt && !bs.some(function (x) { return x.id === bt.id; })) bs = [bt].concat(bs);
         return '<tr class="cartrow ' + (i === sel ? 'sel' : '') + '" data-r="' + i + '"><td>' + (i + 1) + '</td><td class="' + rxc(it) + '">' + esc(it.name) + ' ' + PD.schedBadge(it.schedule) + (it.noDisc ? ' <span class="badge warn" title="Discount-exempt medicine">No disc</span>' : '') + '</td><td>' + esc(it.pack || '') + '</td><td>' + esc(String(svc.mfrName(it.mfrId) || '').slice(0, 8)) + '</td><td>' + esc(it.rack || '') + '</td><td><select class="in sm" data-b="' + i + '">' + bs.map(function (b) { return '<option value="' + b.id + '"' + (b.id === l.batchId ? ' selected' : '') + '>' + esc(b.batchNo) + ' (' + PD.qty(b.qty) + ')</option>'; }).join('') + '</select></td><td class="' + expc(bt.expiry) + '">' + PD.fmtExp(bt.expiry) + '</td>' +
           '<td class="r">' + PD.n2(bt.mrp || it.mrp) + '</td><td class="r"><input class="in sm qn" data-q="' + i + '" type="number" min="0" step="any" value="' + l.qty + '"></td><td class="r"><input class="in sm" data-rt="' + i + '" type="number" step="any" value="' + l.rate + '"' + (it.noDisc ? ' readonly title="Discount-exempt: sold at MRP"' : '') + '></td><td class="r" data-gm="' + i + '">' + PD.n2(PD.num(l.qty) * PD.num(l.rate)) + '</td><td class="r"><input class="in sm" data-d="' + i + '" type="number" min="0" max="100" step="any" value="' + (it.noDisc ? '' : (l.disc || '')) + '"' + (it.noDisc ? ' disabled title="Discount-exempt"' : '') + '></td><td class="r"><b data-am="' + i + '">' + PD.n2(amt) + '</b></td></tr>';
       }).join('') + '</tbody>';
@@ -187,6 +195,7 @@ PD.views.billing = { render: function (host, arg) {
   $('#doc', host).oninput = function () { meta.doctor = this.value; var d = D.doctors.find(function (x) { return x.name.toLowerCase() === meta.doctor.trim().toLowerCase(); }); if (d && d.regNo && !meta.dreg) { meta.dreg = d.regNo; $('#dreg', host).value = d.regNo; } };
   $('#dreg', host).oninput = function () { meta.dreg = this.value; }; $('#paddr', host).oninput = function () { meta.paddr = this.value; };
   $('#rem', host).value = meta.remarks || '';
+  if (meta.editOf) { var bn = document.createElement('div'); bn.style.cssText = 'background:#fff3cd;border:1px solid #e0c060;padding:5px 10px;font-weight:600'; bn.innerHTML = 'Editing bill ' + esc(meta.editNo) + ': change the items, then Save or Print save. It becomes a NEW bill and ' + esc(meta.editNo) + ' is cancelled.'; $('.stitle', host).insertAdjacentElement('afterend', bn); }
   if (meta.customerId) { cus.value = svc.cusName(meta.customerId); cinfo(); }
 
   /* stand by (hold) / recall */
@@ -241,6 +250,7 @@ PD.views.billing = { render: function (host, arg) {
       if (needDoc && !docReg) { $('#dreg', host).focus(); throw new Error('Doctor registration number is required for Schedule H1 / X medicines'); }
       var c = meta.customerId ? svc.customer(meta.customerId) : null;
       var go = function () {
+        if (meta.editOf) { svc.cancelSale(meta.editOf, 'Edited: replaced by a new bill', true); meta.editedFrom = meta.editNo; meta.editOf = ''; }   /* the old bill is cancelled only now, when the new one is saved */
         var bills = svc.postSale({ customerId: meta.customerId, doctor: meta.doctor, doctorReg: docReg, patientAddr: pAddr, payMode: meta.payMode, received: meta.received === '' ? (meta.payMode === 'credit' ? 0 : totals.grand) : meta.received, discPct: meta.discPct, discAmt: meta.discAmt, lines: cart.map(function (l) { return { itemId: l.itemId, batchId: l.batchId, qty: l.qty, rate: l.rate, disc: l.disc }; }) });
         PD.lastBills = bills; PD.toast('Saved ' + bills.map(function (b) { return b.no; }).join(' + ') + ' • ' + PD.money(bills.reduce(function (a, b) { return a + b.total; }, 0)), 'ok');
         if (print) bills.forEach(PD.printBill);

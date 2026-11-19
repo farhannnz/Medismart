@@ -383,10 +383,14 @@ svc.postSaleReturn = function (r) {
 };
 
 /* cancel a saved bill (Admin): stock goes back, the books get a reversing voucher, the bill moves to cancelledSales */
-svc.cancelSale = function (id, reason) {
-  if (!(PD.user && PD.user.role === 'Admin')) throw new Error('Only an Admin can cancel a saved bill');
+/* a saved bill can be edited (turned into a new bill) for 12 hours after it was made */
+svc.EDIT_HOURS = 12;
+svc.saleEditable = function (b) { var t = new Date(b.date + 'T' + (b.time || '00:00') + ':00').getTime(); return isFinite(t) && Date.now() - t <= svc.EDIT_HOURS * 3600000; };
+svc.cancelSale = function (id, reason, edit) {
+  if (!edit && !(PD.user && PD.user.role === 'Admin')) throw new Error('Only an Admin can cancel a saved bill');
   reason = String(reason || '').trim(); if (!reason) throw new Error('Give a reason for cancelling');
   var s = D().sales.find(function (x) { return x.id === id; }); if (!s) throw new Error('Bill not found');
+  if (edit && !svc.saleEditable(s)) throw new Error('Bill ' + s.no + ' is older than ' + svc.EDIT_HOURS + ' hours and can no longer be edited');
   if (D().sreturns.some(function (r) { return r.billId === id; })) throw new Error('Returns were made against this bill, so it cannot be cancelled');
   var ov = D().vouchers.find(function (v) { return v.id === s.voucherId; });
   var rv = ov ? svc.voucher(s.date, 'Sales Cancel', 'Cancelled bill ' + s.no + ': ' + reason, ov.lines.map(function (l) { return { acc: l.acc, dr: l.cr, cr: l.dr }; }), { kind: 'salecancel', id: s.id }) : null;

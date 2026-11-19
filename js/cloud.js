@@ -500,6 +500,20 @@ function shopLink() {
     C.send('return', 'warehouse', rec.no, Object.assign(svc.returnFile(rec), { shopId: C.shopId }));
     return rec;
   };
+  var rp = svc.requestPurchaseAuth; svc.requestPurchaseAuth = function (o) {
+    var rec = rp.apply(this, arguments), D = PD.DB;
+    C.send('purchase_auth', 'warehouse', rec.no, { type: 'purchase_auth', shop: D.shop.name, shopId: C.shopId, no: rec.no, date: rec.date, supplier: rec.supplier, invNo: rec.invNo, payMode: rec.payMode, total: rec.total, lines: rec.lines });
+    return rec;
+  };
+  /* the warehouse authorized / rejected one of our purchases */
+  listen(xref().where('shopId', '==', C.shopId).where('from', '==', 'shop').where('type', '==', 'purchase_auth').where('authStatus', 'in', ['approved', 'rejected']), function (d) {
+    var ref = d.ref, ok = d.data().authStatus === 'approved', why = d.data().reason || '', no = d.data().no;
+    db.runTransaction(function (tx) { return tx.get(ref).then(function (s) { if (!s.exists || s.data().shopDone) throw new Error('taken'); tx.update(ref, { shopDone: SESSION }); }); })
+      .then(function () {
+        try { var r = svc.finishPurchaseAuth(no, ok, why); if (r) { PD.toast && PD.toast(ok ? 'Warehouse authorized purchase ' + r.no + ': stock added (' + r.purNo + ')' : 'Warehouse rejected purchase ' + r.no + (why ? ': ' + why : ''), ok ? 'ok' : 'err'); refresh(); } }
+        catch (e) { console.warn('purchase auth', e); PD.toast && PD.toast('Could not post authorized purchase ' + no + ': ' + e.message, 'err'); }
+      }).catch(function (e) { if (String(e.message) !== 'taken') console.warn('auth', e); });
+  });
   /* incoming: dispatches for this shop */
   listen(xref().where('shopId', '==', C.shopId).where('to', '==', 'shop').where('type', '==', 'dispatch').where('status', '==', 'new'), function (d) {
     take(d, function (x) { var nd = svc.importDispatch(x.payload); PD.toast && PD.toast('📦 Stock sent by the warehouse: ' + nd.no + '. Open Receive Stock (F4).', 'ok'); refresh(); return nd.no; });

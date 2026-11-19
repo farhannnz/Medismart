@@ -8,6 +8,29 @@ var PD = window.PD, svc = PD.svc;
 function D() { return PD.DB; }
 var WH = 'wh';
 
+/* ---------- purchases from outside suppliers need the warehouse's authorization ---------- */
+/* the shop makes the invoice, it is SENT to the warehouse; stock and accounts change only after the warehouse authorizes it */
+svc.requestPurchaseAuth = function (inv) {
+  if (!inv.supplierId) throw new Error('Select a supplier');
+  if (!inv.lines || !inv.lines.length) throw new Error('Add at least one item');
+  var total = 0, lines = inv.lines.map(function (l) {
+    if (!l.itemId) throw new Error('Select an item on every line');
+    if (!(PD.num(l.qty) > 0)) throw new Error('Quantity must be greater than zero (' + svc.itemName(l.itemId) + ')');
+    var c = svc.calcPurchaseLine(l), it = svc.item(l.itemId); total += c.amount;
+    return { name: it.name, batchNo: l.batchNo || '', expiry: l.expiry || '', qty: PD.num(l.qty), unit: (l.unit === 'sale' ? (it.unit || 'Strip') : (it.punit || 'Box')), free: PD.num(l.free), rate: PD.num(l.rate), mrp: PD.num(l.mrp), disc: PD.num(l.disc), tax: PD.num(l.tax), amount: PD.r2(c.amount) };
+  });
+  var list = (D().pauth = D().pauth || []);
+  var rec = { id: PD.uid('pa'), no: svc.docNo('PA-', 'PAUTH'), date: PD.today(), supplierId: inv.supplierId, supplier: svc.supName(inv.supplierId), invNo: inv.invNo || '', payMode: inv.payMode || 'credit', total: PD.r2(total), inv: JSON.parse(JSON.stringify(inv)), lines: lines, status: 'Waiting', by: PD.user ? PD.user.name : '' };
+  list.push(rec); PD.log('Purchase sent for authorization ' + rec.no, rec.supplier + ' ' + rec.total); PD.save(); return rec;
+};
+/* the warehouse answered: post the purchase (approved) or mark it rejected */
+svc.finishPurchaseAuth = function (no, ok, reason) {
+  var r = (D().pauth = D().pauth || []).find(function (x) { return x.no === no; }); if (!r || r.status !== 'Waiting') return null;
+  if (!ok) { r.status = 'Rejected'; r.reason = reason || ''; PD.save(); return r; }
+  var inv = svc.postPurchase(Object.assign({}, r.inv, { date: r.inv.date || r.date }));
+  r.status = 'Authorized'; r.purNo = inv.no; r.purId = inv.id; PD.log('Purchase authorized by warehouse ' + r.no, inv.no); PD.save(); return r;
+};
+
 /* ---------- the warehouse is an external party (separate software) and the shop's only supplier ---------- */
 /* Head Office: older stock transfers (at cost, nothing payable) were credited here. Billed dispatches go to the warehouse's supplier account. */
 svc.headOffice = function () {
