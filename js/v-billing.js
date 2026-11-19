@@ -22,7 +22,7 @@ function cancelModal(b, done) {
 function editAsNew(b) {
   if (!svc.saleEditable(b)) { PD.toast('Bills can be edited only within ' + svc.EDIT_HOURS + ' hours of making them', 'err'); return; }
   if (PD.DB.sreturns.some(function (r) { return r.billId === b.id; })) { PD.toast('Returns were made against this bill, so it cannot be edited', 'err'); return; }
-  var cart = b.lines.map(function (l) { return { itemId: l.itemId, batchId: l.batchId, qty: l.qty, rate: l.rate, disc: l.disc || 0 }; });
+  var cart = b.lines.map(function (l) { return { itemId: l.itemId, batchId: l.batchId, qty: l.qty, rate: l.rate, disc: l.disc || 0, oldBatch: l.batchId, oldQty: l.qty }; });
   var meta = { customerId: b.customerId || '', doctor: b.doctor || '', paddr: b.patientAddr || '', dreg: b.doctorReg || '', payMode: b.payMode || 'cash', received: b.payMode === 'credit' ? b.paid : '', discPct: '', discAmt: b.disc && b.gross ? PD.r2(b.disc) : '', remarks: '', editOf: b.id, editNo: b.no };
   PD.billTabN++; PD.go('billing', { tab: 'b' + PD.billTabN, title: 'Edit ' + b.no, recalled: { cart: cart, meta: meta } });
 }
@@ -115,11 +115,13 @@ PD.views.billing = { render: function (host, arg) {
   PD.on($('#res', host), 'mousedown', '[data-i]', function (e, t) { e.preventDefault(); add(results[+t.dataset.i].id, false); q.value = ''; });
 
   /* grid */
+  /* strips available for this line: the batch stock (plus what the bill being edited already holds) */
+  function avail(l) { var b = svc.batch(l.batchId); return (b ? b.qty : 0) + (meta.editOf && l.oldBatch === l.batchId ? PD.num(l.oldQty) : 0); }
   function add(itemId, focusQty) {
     var it = svc.item(itemId), batches = svc.batchesOf(itemId, true);
     if (!batches.length) { PD.toast(it.name + ' is out of stock (or only expired batches left)', 'err'); return; }
     var ex = cart.find(function (l) { return l.itemId === itemId; });
-    if (ex) { var bt = svc.batch(ex.batchId); if (ex.qty + 1 > bt.qty) { PD.toast('Only ' + PD.qty(bt.qty) + ' in this batch', 'err'); } else ex.qty++; }
+    if (ex) { var bt = svc.batch(ex.batchId); if (ex.qty + 1 > avail(ex)) { PD.toast('Only ' + PD.qty(avail(ex)) + ' in this batch', 'err'); } else ex.qty++; }
     else cart.push({ itemId: itemId, batchId: batches[0].id, qty: 1, rate: batches[0].mrp || it.mrp, disc: 0 });
     sel = ex ? cart.indexOf(ex) : cart.length - 1; drawCart();
     if (focusQty) { var f = $('[data-q="' + sel + '"]', host); if (f) { f.focus(); f.select(); } }
@@ -163,13 +165,13 @@ PD.views.billing = { render: function (host, arg) {
   }
   PD.on($('#cart', host), 'input', '[data-q],[data-rt],[data-d]', function (e, t) {
     var i = +(t.dataset.q || t.dataset.rt || t.dataset.d), l = cart[i]; sel = i;
-    if (t.dataset.q != null) { l.qty = PD.num(t.value); var b = svc.batch(l.batchId); if (l.qty > b.qty) t.classList.add('bad'); else t.classList.remove('bad'); }
+    if (t.dataset.q != null) { l.qty = PD.num(t.value); var av = avail(l); if (l.qty > av) { l.qty = av; t.value = av; PD.toast('Only ' + PD.qty(av) + ' available in this batch: quantity set to ' + PD.qty(av), 'err'); } t.classList.remove('bad'); }
     else if (t.dataset.rt != null) { l.rate = PD.num(t.value); var rb = svc.batch(l.batchId), mp = PD.num(rb && rb.mrp) || PD.num(svc.item(l.itemId).mrp); if (!D.settings.allowAboveMrp && mp > 0 && l.rate > mp + 0.005) { t.classList.add('bad'); PD.toast('Rate is above the MRP ' + PD.n2(mp) + ': the bill will not save', 'err'); } else t.classList.remove('bad'); }
     else l.disc = PD.num(t.value);
     totals(); showEntry();
   });
   PD.on($('#cart', host), 'keydown', '[data-q],[data-rt],[data-d]', function (e, t) { if (e.key === 'Enter') { e.preventDefault(); q.focus(); q.select(); } });
-  PD.on($('#cart', host), 'change', '[data-b]', function (e, t) { var l = cart[+t.dataset.b], b = svc.batch(t.value); l.batchId = b.id; l.rate = b.mrp; if (l.qty > b.qty) l.qty = b.qty; sel = +t.dataset.b; drawCart(); });
+  PD.on($('#cart', host), 'change', '[data-b]', function (e, t) { var l = cart[+t.dataset.b], b = svc.batch(t.value); l.batchId = b.id; l.rate = b.mrp; l.oldBatch !== b.id && (l.oldBatch = '', l.oldQty = 0); if (l.qty > avail(l)) l.qty = avail(l); sel = +t.dataset.b; drawCart(); });
   PD.on($('#cart', host), 'click', '[data-r]', function (e, t) { sel = +t.dataset.r; PD.$$('#cart tr.cartrow', host).forEach(function (r) { r.classList.toggle('sel', r === t); }); showEntry(); });
   $('#clr', host).onclick = function () { if (sel < 0 || !cart[sel]) { PD.toast('Select a row in the grid, then press Delete'); return; } cart.splice(sel, 1); sel = Math.min(sel, cart.length - 1); drawCart(); };
   $('#cancel', host).onclick = function () { if (!cart.length) return; PD.confirm('Clear all items from this bill?', 'Clear', true).then(function (ok) { if (ok) { cart = []; sel = -1; meta.received = ''; meta.discPct = ''; meta.discAmt = ''; drawCart(); } }); };
