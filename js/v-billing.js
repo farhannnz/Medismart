@@ -26,8 +26,22 @@ function editAsNew(b) {
   var meta = { customerId: b.customerId || '', doctor: b.doctor || '', paddr: b.patientAddr || '', dreg: b.doctorReg || '', payMode: b.payMode || 'cash', received: b.payMode === 'credit' ? b.paid : '', discPct: '', discAmt: b.disc && b.gross ? PD.r2(b.disc) : '', remarks: '', editOf: b.id, editNo: b.no };
   PD.billTabN++; PD.go('billing', { tab: 'b' + PD.billTabN, title: 'Edit ' + b.no, recalled: { cart: cart, meta: meta } });
 }
+/* repeat order: the same customer and medicines in a NEW bill, today's batches and prices; change the quantities, then Save. The old bill is untouched, no time limit. */
+function repeatOrder(b) {
+  var cart = [], miss = [];
+  b.lines.forEach(function (l) {
+    var it = svc.item(l.itemId), bt = it && svc.batchesOf(l.itemId, true)[0];
+    if (!it || !bt) { miss.push(l.name); return; }
+    cart.push({ itemId: l.itemId, batchId: bt.id, qty: l.qty, rate: bt.mrp || it.mrp, disc: it.noDisc ? 0 : (l.disc || 0) });
+  });
+  if (!cart.length) { PD.toast('None of these medicines is in stock now', 'err'); return; }
+  var meta = { customerId: b.customerId || '', doctor: b.doctor || '', paddr: b.patientAddr || '', dreg: b.doctorReg || '', payMode: b.payMode || 'cash', received: '', discPct: '', discAmt: '', remarks: 'Repeat of ' + b.no };
+  PD.billTabN++; PD.go('billing', { tab: 'b' + PD.billTabN, title: 'Repeat ' + b.no, recalled: { cart: cart, meta: meta } });
+  if (miss.length) setTimeout(function () { PD.toast('Not in stock, left out: ' + miss.join(', '), 'err'); }, 400);
+  else PD.toast('Items of ' + b.no + ' loaded. Change the quantities if needed, then Save.', 'ok');
+}
 PD.showBill = function (b, onDone) {
-  PD.modal({ title: 'Bill ' + b.no, size: 'md', body: '<div style="font:13px/1.45 monospace">' + PD.billHTML(b).replace(/<h2>/g, '<h3>').replace(/<\/h2>/g, '</h3>') + '</div><p class="hint">Profit on this bill: ' + PD.money(b.profit) + ' • Entered by ' + esc(b.user) + (svc.saleEditable(b) ? ' • Can be edited for 12 hours after it was made' : '') + '</p>', foot: [{ label: 'Close' }].concat(svc.saleEditable(b) ? [{ label: 'Edit as new bill', fn: function (api) { api.close(); editAsNew(b); return false; } }] : []).concat(PD.user && PD.user.role === 'Admin' ? [{ label: 'Cancel bill', cls: 'd', fn: function (api) { cancelModal(b, function () { api.close(); if (onDone) onDone(); }); return false; } }] : []).concat([{ label: 'Sales return', fn: function () { PD.go('salesret', { billNo: b.no }); } }, { label: 'Print', cls: 'p', icon: 'print', fn: function () { PD.printBill(b); return false; } }]) });
+  PD.modal({ title: 'Bill ' + b.no, size: 'md', body: '<div style="font:13px/1.45 monospace">' + PD.billHTML(b).replace(/<h2>/g, '<h3>').replace(/<\/h2>/g, '</h3>') + '</div><p class="hint">Profit on this bill: ' + PD.money(b.profit) + ' • Entered by ' + esc(b.user) + (svc.saleEditable(b) ? ' • Can be edited for 12 hours after it was made' : '') + '</p>', foot: [{ label: 'Close' }, { label: 'Repeat order', fn: function (api) { api.close(); repeatOrder(b); return false; } }].concat(svc.saleEditable(b) ? [{ label: 'Edit as new bill', fn: function (api) { api.close(); editAsNew(b); return false; } }] : []).concat(PD.user && PD.user.role === 'Admin' ? [{ label: 'Cancel bill', cls: 'd', fn: function (api) { cancelModal(b, function () { api.close(); if (onDone) onDone(); }); return false; } }] : []).concat([{ label: 'Sales return', fn: function () { PD.go('salesret', { billNo: b.no }); } }, { label: 'Print', cls: 'p', icon: 'print', fn: function () { PD.printBill(b); return false; } }]) });
 };
 
 /* ---------- billing screen (MediSmart "Sale / Billing" window layout) ---------- */
