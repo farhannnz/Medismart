@@ -6,7 +6,7 @@ var PD = window.PD, esc = PD.esc, svc = PD.svc, $ = PD.$, $$ = PD.$$;
 var NAV = [
   ['Overview', [['dashboard', 'Dashboard', 'dash', 'F1']]],
   ['Sales', [['billing', 'Sales Bill', 'bill', 'F2'], ['salesret', 'Sales Return', 'ret', ''], ['custhist', 'Customer History', 'users', ''], ['nodisc', 'Discount-Exempt Medicines', 'bill', '']]],
-  ['Warehouse', [['request', 'Stock Request', 'order', 'F3'], ['reqlist', 'Request List', 'order', ''], ['autoprop', 'Auto Returns & Requests (approve)', 'order', ''], ['receive', 'Receive Stock', 'cart', 'F4']]],
+  ['Warehouse', [['request', 'Stock Request', 'order', 'F3'], ['reqlist', 'Request List', 'order', ''], ['autoprop', 'Auto Returns & Requests (approve)', 'order', ''], ['receive', 'Receive Stock', 'cart', 'F4'], ['purchase', 'Own Purchase (warehouse authorizes)', 'cart', '']]],
   ['Stock', [['stock', 'Current Stock', 'box', 'F5'], ['shelves', 'Shelves', 'box', ''], ['expiry', 'Expiry Watch', 'clock', ''], ['expclaim', 'Return Expired Stock', 'clock', ''], ['fastmoving', 'Fast Moving (7 / 15 / 30 days)', 'report', '']]],
   ['Insights', [['reports', 'Reports', 'report', 'F7'], ['shoppnl', 'Profit & Loss', 'report', ''], ['accounts', 'Accounts', 'book', 'F8'], ['books', 'Books & Finance', 'rupee', '']]],
   ['Setup', [['attendance', 'Attendance', 'users', ''], ['settings', 'Settings & Staff', 'gear', '']]]
@@ -75,7 +75,7 @@ var MENUS = [
     ['Stock Request', 'request', null, 'F3'], ['Auto Fill Request (low stock)', 'request', { auto: 1 }], ['Request List', 'reqlist'], ['Auto Returns && Requests (approve)', 'autoprop'], '-',
     ['Receive Stock (scan)', 'receive', null, 'F4'], '-',
     ['Return Stock to Warehouse (scan)', 'whreturn'], ['Warehouse Account (bills && payments)', 'accounts', { tab: 'ledger', acc: 'sup_wh' }], ['Old Transfers from Warehouse (at cost)', 'accounts', { tab: 'ledger', acc: 'ho' }],
-    ['Purchase Report', 'reports', { report: 'pur-reg' }]]],
+    ['Own Purchase (warehouse authorizes)', 'purchase'], ['Purchase Report', 'reports', { report: 'pur-reg' }]]],
   ['Cash', [
     ['Cash Register && Shifts', 'cashreg'], ['Cash In / Out / Handover (admin)', 'cashreg', { mv: 1 }], ['Close My Shift', 'closeshift']]],
   ['Accounts', [
