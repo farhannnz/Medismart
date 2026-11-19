@@ -146,6 +146,7 @@ PD.views.purchase = { render: function (host, arg) {
     $('#pv', el).onclick = function () { brow(0 === bi + 1 ? 0 : -1); }; $('#nx', el).onclick = function () { brow(1); };
     $('#sv', el).onclick = function () {
       try {
+        if (PD.cloud && PD.cloud.shop && !PD.cloud.shop.allowPurchase) throw new Error('Your shop is not allowed to make its own purchases. Ask the warehouse admin to switch it on (Shops and Logins).');
         var f = PD.readForm(el, [{ k: 'supplierId', label: 'Supplier', req: true }, { k: 'invNo', label: 'Invoice no.' }, { k: 'date', label: 'Date', type: 'date', req: true }, { k: 'dueDate', label: 'Due', type: 'date' }]); f.payMode = $('#cashp', el).checked ? 'cash' : 'credit';
         var lines = grid.lines().filter(function (l) { return l.itemId; });
         lines.forEach(function (l) { var it = svc.item(l.itemId); if (it.batch !== false && (!l.batchNo || !l.expiry)) throw new Error('Batch number and expiry are required for ' + it.name); if (!(PD.num(l.rate) > 0)) throw new Error('Enter the rate for ' + it.name); if (!(PD.num(l.mrp) > 0)) throw new Error('Enter the MRP for ' + it.name); });

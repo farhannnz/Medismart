@@ -514,6 +514,8 @@ function shopLink() {
         catch (e) { console.warn('purchase auth', e); PD.toast && PD.toast('Could not post authorized purchase ' + no + ': ' + e.message, 'err'); }
       }).catch(function (e) { if (String(e.message) !== 'taken') console.warn('auth', e); });
   });
+  /* the warehouse can switch own purchases on / off for this shop: follow it live */
+  db.collection('shops').doc(C.shopId).onSnapshot(function (s) { if (s.exists && C.shop) C.shop.allowPurchase = !!s.data().allowPurchase; }, function (e) { console.warn('shop watch', e); });
   /* incoming: dispatches for this shop */
   listen(xref().where('shopId', '==', C.shopId).where('to', '==', 'shop').where('type', '==', 'dispatch').where('status', '==', 'new'), function (d) {
     take(d, function (x) { var nd = svc.importDispatch(x.payload); PD.toast && PD.toast('📦 Stock sent by the warehouse: ' + nd.no + '. Open Receive Stock (F4).', 'ok'); refresh(); return nd.no; });
