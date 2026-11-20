@@ -102,6 +102,8 @@ PD.views.billing = { render: function (host, arg) {
     res.style.display = document.activeElement === q ? 'block' : 'none';
     var on = $('.on', res); if (on) on.scrollIntoView({ block: 'nearest' });
   }
+  q.__hotItem = function () { var r = results[idx]; return r ? r.id : ''; };   /* Alt+H */
+  PD.billCartItem = function (el) { var t = el && el.closest && el.closest('tr[data-r]'); var l = (t && cart[+t.dataset.r]) || cart[sel]; return l ? l.itemId : ''; };
   q.addEventListener('input', function () { idx = 0; search(); });
   q.addEventListener('focus', function () { if (q.value === '*') q.select(); search(); });
   q.addEventListener('blur', function () { setTimeout(function () { $('#res', host).style.display = 'none'; }, 160); });

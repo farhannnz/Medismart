@@ -105,6 +105,26 @@ PD.views.expiry = { render: function (host, arg) {
   function claimBadge(v) { return '<span class="badge ' + ({ Pending: 'warn', Claimed: 'info', Credited: 'ok', Replaced: 'ok', Rejected: 'bad' }[v] || '') + '">' + esc(v) + '</span>'; }
 } };
 
+PD.itemInfoHTML = function (sel) {
+  var D = PD.DB, esc = PD.esc, svc = PD.svc;
+    var it = svc.item(sel), bs = D.batches.filter(function (b) { return b.itemId === sel && b.qty > 0; }).sort(function (a, b) { return (a.expiry || '9').localeCompare(b.expiry || '9'); }), mv = svc.itemFlow(sel).slice(-12).reverse(),
+      sales = []; D.sales.slice().reverse().some(function (s) { s.lines.forEach(function (l) { if (l.itemId === sel) sales.push([s, l]); }); return sales.length >= 8; });
+    var pur = []; D.purchases.slice().reverse().some(function (p) { p.lines.forEach(function (l) { if (l.itemId === sel) pur.push([p, l]); }); return pur.length >= 8; });
+    var offs = D.offers.filter(function (o) { return (o.itemId === sel) || (!o.itemId && o.mfrId === it.mfrId); });
+    function box(t, b) { return '<div class="card"><div class="hd"><h3 style="padding:0;border:0">' + t + '</h3></div><div class="tw" style="max-height:260px">' + b + '</div></div>'; }
+    return '<div class="card" style="margin-bottom:14px"><div class="bd row sp"><div><h2 style="font-size:20px">' + esc(it.name) + ' ' + PD.schedBadge(it.schedule) + '</h2><span class="mut">' + esc(it.generic) + ' • ' + esc(svc.mfrName(it.mfrId)) + ' • ' + esc(it.cat) + ' • Rack ' + esc(it.rack || '-') + ' • GST ' + it.tax + '% • MRP ' + PD.n2(it.mrp) + '</span></div><div class="row"><span class="badge brand">Stock ' + PD.qty(svc.stockOf(sel)) + ' ' + esc(it.unit) + '</span><button class="btn sm" data-sale="' + sel + '">' + PD.icon('bill') + 'Bill this</button></div></div></div><div class="grid g2">' +
+      box('Batches', bs.length ? '<table class="t"><thead><tr><th>Batch</th><th>Expiry</th><th class="r">MRP</th><th class="r">Cost</th><th class="r">Qty</th></tr></thead><tbody>' + bs.map(function (b) { return '<tr><td>' + esc(b.batchNo) + '</td><td>' + PD.expBadge(b.expiry) + '</td><td class="r">' + PD.n2(b.mrp) + '</td><td class="r">' + PD.n2(b.rate) + '</td><td class="r">' + PD.qty(b.qty) + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">No stock</div>') +
+      box('Stock flow (latest 12)', mv.length ? '<table class="t"><tbody>' + mv.map(function (m) { return '<tr><td>' + PD.fmtDate(m.date) + '</td><td><span class="badge">' + m.type + '</span></td><td>' + esc(m.ref || '') + '</td><td class="r"><b style="color:' + (m.qty < 0 ? 'var(--bad)' : 'var(--ok)') + '">' + (m.qty > 0 ? '+' : '') + PD.qty(m.qty) + '</b></td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">No movements</div>') +
+      box('Recent sales', sales.length ? '<table class="t"><tbody>' + sales.map(function (x) { return '<tr><td>' + PD.fmtDate(x[0].date) + '</td><td>' + esc(x[0].no) + '</td><td>' + esc(svc.cusName(x[0].customerId)) + '</td><td class="r">' + PD.qty(x[1].qty) + ' × ' + PD.n2(x[1].rate) + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">No sales yet</div>') +
+      box('Recent purchases', pur.length ? '<table class="t"><tbody>' + pur.map(function (x) { return '<tr><td>' + PD.fmtDate(x[0].date) + '</td><td>' + esc(svc.supName(x[0].supplierId)) + '</td><td class="r">' + PD.qty(x[1].qty) + (x[1].free ? ' + ' + PD.qty(x[1].free) + ' free' : '') + '</td><td class="r">' + PD.n2(x[1].rate) + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">No purchases yet</div>') + '</div>' +
+      (offs.length ? '<div class="card" style="margin-top:14px"><div class="bd">' + offs.map(function (o) { return '<span class="badge brand" style="margin-right:6px">' + esc(o.desc) + ' • till ' + PD.fmtDate(o.to) + '</span>'; }).join('') + '</div></div>' : '');
+};
+/* Alt+H anywhere: batches, stock flow, recent sales and purchases of one medicine in a pop-up (sale bill, purchase invoice, ...) */
+PD.showItemHistory = function (itemId) {
+  var it = PD.svc.item(itemId); if (!it) return;
+  PD.modal({ title: 'History: ' + it.name, size: 'lg', body: PD.itemInfoHTML(itemId).replace(/<button class="btn sm" data-sale=[^>]*>.*?<\/button>/, ''), foot: [{ label: 'Close' }] });
+};
+
 /* ---------- product explorer ---------- */
 PD.views.explore = { render: function (host, arg) {
   var D = PD.DB, groupBy = 'cat', sel = (arg && arg.itemId) || '', q = '', open = {};
@@ -126,17 +146,7 @@ PD.views.explore = { render: function (host, arg) {
   }
   function linked() {
     var el = $('#linked', host); if (!sel) { el.innerHTML = '<div class="card"><div class="empty">Select a product.</div></div>'; return; }
-    var it = svc.item(sel), bs = D.batches.filter(function (b) { return b.itemId === sel && b.qty > 0; }).sort(function (a, b) { return (a.expiry || '9').localeCompare(b.expiry || '9'); }), mv = svc.itemFlow(sel).slice(-12).reverse(),
-      sales = []; D.sales.slice().reverse().some(function (s) { s.lines.forEach(function (l) { if (l.itemId === sel) sales.push([s, l]); }); return sales.length >= 8; });
-    var pur = []; D.purchases.slice().reverse().some(function (p) { p.lines.forEach(function (l) { if (l.itemId === sel) pur.push([p, l]); }); return pur.length >= 8; });
-    var offs = D.offers.filter(function (o) { return (o.itemId === sel) || (!o.itemId && o.mfrId === it.mfrId); });
-    function box(t, b) { return '<div class="card"><div class="hd"><h3 style="padding:0;border:0">' + t + '</h3></div><div class="tw" style="max-height:260px">' + b + '</div></div>'; }
-    el.innerHTML = '<div class="card" style="margin-bottom:14px"><div class="bd row sp"><div><h2 style="font-size:20px">' + esc(it.name) + ' ' + PD.schedBadge(it.schedule) + '</h2><span class="mut">' + esc(it.generic) + ' • ' + esc(svc.mfrName(it.mfrId)) + ' • ' + esc(it.cat) + ' • Rack ' + esc(it.rack || '-') + ' • GST ' + it.tax + '% • MRP ' + PD.n2(it.mrp) + '</span></div><div class="row"><span class="badge brand">Stock ' + PD.qty(svc.stockOf(sel)) + ' ' + esc(it.unit) + '</span><button class="btn sm" data-sale="' + sel + '">' + PD.icon('bill') + 'Bill this</button></div></div></div><div class="grid g2">' +
-      box('Batches', bs.length ? '<table class="t"><thead><tr><th>Batch</th><th>Expiry</th><th class="r">MRP</th><th class="r">Cost</th><th class="r">Qty</th></tr></thead><tbody>' + bs.map(function (b) { return '<tr><td>' + esc(b.batchNo) + '</td><td>' + PD.expBadge(b.expiry) + '</td><td class="r">' + PD.n2(b.mrp) + '</td><td class="r">' + PD.n2(b.rate) + '</td><td class="r">' + PD.qty(b.qty) + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">No stock</div>') +
-      box('Stock flow (latest 12)', mv.length ? '<table class="t"><tbody>' + mv.map(function (m) { return '<tr><td>' + PD.fmtDate(m.date) + '</td><td><span class="badge">' + m.type + '</span></td><td>' + esc(m.ref || '') + '</td><td class="r"><b style="color:' + (m.qty < 0 ? 'var(--bad)' : 'var(--ok)') + '">' + (m.qty > 0 ? '+' : '') + PD.qty(m.qty) + '</b></td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">No movements</div>') +
-      box('Recent sales', sales.length ? '<table class="t"><tbody>' + sales.map(function (x) { return '<tr><td>' + PD.fmtDate(x[0].date) + '</td><td>' + esc(x[0].no) + '</td><td>' + esc(svc.cusName(x[0].customerId)) + '</td><td class="r">' + PD.qty(x[1].qty) + ' × ' + PD.n2(x[1].rate) + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">No sales yet</div>') +
-      box('Recent purchases', pur.length ? '<table class="t"><tbody>' + pur.map(function (x) { return '<tr><td>' + PD.fmtDate(x[0].date) + '</td><td>' + esc(svc.supName(x[0].supplierId)) + '</td><td class="r">' + PD.qty(x[1].qty) + (x[1].free ? ' + ' + PD.qty(x[1].free) + ' free' : '') + '</td><td class="r">' + PD.n2(x[1].rate) + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">No purchases yet</div>') + '</div>' +
-      (offs.length ? '<div class="card" style="margin-top:14px"><div class="bd">' + offs.map(function (o) { return '<span class="badge brand" style="margin-right:6px">' + esc(o.desc) + ' • till ' + PD.fmtDate(o.to) + '</span>'; }).join('') + '</div></div>' : '');
+    el.innerHTML = PD.itemInfoHTML(sel);
   }
   $('#gb', host).onchange = function () { groupBy = this.value; group = ''; tree(); };
   $('#eq', host).oninput = function () { q = this.value; tree(); };

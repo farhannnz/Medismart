@@ -129,6 +129,7 @@ PD.combo = function (inp, o) {
     var on = PD.$('.on', dd); if (on) on.scrollIntoView({ block: 'nearest' });
   }
   function pick(x) { close(); o.onPick(x); }
+  inp.__hotItem = function () { var x = dd && list[idx]; return x ? (x.item ? x.item.id : x.id) : ''; };   /* Alt+H: the medicine highlighted in this box */
   inp.addEventListener('input', function () { idx = 0; render(); });
   inp.addEventListener('focus', function () { if (o.openOnFocus !== false) { idx = 0; render(); } });
   inp.addEventListener('keydown', function (e) {

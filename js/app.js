@@ -241,11 +241,19 @@ function renderWin() {
 function render() { renderWin(); }
 
 /* ---------- keyboard ---------- */
+/* which medicine is the cursor on? the highlighted one in an open list, else the bill line / purchase line the cursor is in */
+PD.hotItemId = function (el) {
+  var id = el && el.__hotItem ? el.__hotItem() : '';
+  if (!id && el && el.tagName === 'INPUT' && el.hasAttribute('data-item')) { var nm = String(el.value || '').trim().toLowerCase(), it = nm && PD.DB.items.find(function (x) { return String(x.name).toLowerCase() === nm; }); if (it) id = it.id; }
+  if (!id && PD.billCartItem && el && el.closest && el.closest('#cart')) id = PD.billCartItem(el);
+  return id;
+};
 var FKEYS = { F1: 'dashboard', F2: 'billing', F3: 'request', F4: 'receive', F5: 'stock', F7: 'reports', F8: 'accounts' };
 addEventListener('keydown', function (e) {
   if (!PD.user) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); palette(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') { e.preventDefault(); palette(); return; }
+  if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'h' && !PD.$('.ov')) { e.preventDefault(); var hid = PD.hotItemId(document.activeElement); if (hid) PD.showItemHistory(hid); else PD.toast('Alt+H: put the cursor on a medicine (or pick one in the list) to see its history', 'err'); return; }
   if (e.ctrlKey && e.key === 'ArrowRight') { act('nav:1'); return; } if (e.ctrlKey && e.key === 'ArrowLeft') { act('nav:-1'); return; }
   if (FKEYS[e.key] && !e.ctrlKey && !e.altKey) { e.preventDefault(); PD.go(FKEYS[e.key]); }
   if (PD.hotkeys && PD.hotkeys[e.key] && !PD.$('.ov')) { var f = PD.hotkeys[e.key]; if (document.body.contains(f.el)) { e.preventDefault(); f.fn(e); } }
